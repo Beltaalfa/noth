@@ -31,6 +31,7 @@ export default async function AdminLayout({
     { href: "/admin/config/setores", label: "Setores", icon: <IconBuilding /> },
     { href: "/admin/config/conexoes", label: "Conexões de Banco", icon: <IconDatabase /> },
     { href: "/admin/alteracao-despesa", label: "Ajuste de Despesas", icon: <IconTools /> },
+    { href: "/admin/negociacoes", label: "Negociações", icon: <IconTools /> },
     { href: "/admin/config/relatorios", label: "Relatórios", icon: <IconReport /> },
     { href: "/admin/audit-relatorios", label: "Auditoria de Relatórios", icon: <IconChartBar /> },
     { href: "/admin/logs", label: "Logs", icon: <IconList /> },
