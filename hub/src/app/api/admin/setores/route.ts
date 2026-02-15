@@ -16,9 +16,30 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const groupId = searchParams.get("groupId");
+  const page = searchParams.get("page");
+  const limit = searchParams.get("limit");
+
+  const where = groupId ? { groupId } : undefined;
+
+  if (page && limit) {
+    const p = Math.max(1, Number(page) || 1);
+    const l = Math.min(100, Math.max(1, Number(limit)) || 25);
+    const skip = (p - 1) * l;
+    const [data, total] = await Promise.all([
+      prisma.sector.findMany({
+        where,
+        orderBy: { name: "asc" },
+        skip,
+        take: l,
+        include: { group: { include: { client: { select: { name: true } } } } },
+      }),
+      prisma.sector.count({ where: where ?? {} }),
+    ]);
+    return NextResponse.json({ data, total });
+  }
 
   const setores = await prisma.sector.findMany({
-    where: groupId ? { groupId } : undefined,
+    where,
     orderBy: { name: "asc" },
     include: { group: { include: { client: { select: { name: true } } } } },
   });

@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { IconPlus, IconPencil, IconTrash, IconPlugConnected } from "@tabler/icons-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
+import { Pagination } from "@/components/ui/Pagination";
 
 type Conexao = {
   id: string;
@@ -21,6 +23,9 @@ type Conexao = {
 
 export default function ConexoesPage() {
   const [data, setData] = useState<Conexao[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [clientes, setClientes] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -42,11 +47,18 @@ export default function ConexoesPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [cRes, clRes] = await Promise.all([fetch("/api/admin/conexoes"), fetch("/api/admin/clientes")]);
-    if (cRes.ok) setData(await cRes.json());
+    const [cRes, clRes] = await Promise.all([
+      fetch(`/api/admin/conexoes?page=${page}&limit=${pageSize}`),
+      fetch("/api/admin/clientes"),
+    ]);
+    if (cRes.ok) {
+      const json = await cRes.json();
+      setData(json.data ?? json);
+      setTotal(json.total ?? 0);
+    }
     if (clRes.ok) setClientes(await clRes.json());
     setLoading(false);
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -117,7 +129,7 @@ export default function ConexoesPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.clientId) { alert("Selecione um cliente"); return; }
+    if (!form.clientId) { toast.error("Selecione um cliente"); return; }
     setSaving(true);
     try {
       const url = editing ? `/api/admin/conexoes/${editing.id}` : "/api/admin/conexoes";
@@ -125,15 +137,17 @@ export default function ConexoesPage() {
       const { password, ...formWithoutPassword } = form;
       const body = editing && !password ? formWithoutPassword : { ...form };
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (res.ok) { setModalOpen(false); fetchData(); } else alert((await res.json()).error || "Erro");
+      if (res.ok) { toast.success(editing ? "Conexão atualizada!" : "Conexão criada!"); setModalOpen(false); fetchData(); } else toast.error((await res.json()).error || "Erro");
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (row: Conexao) => {
     if (!confirm("Excluir esta conexão?")) return;
     const res = await fetch(`/api/admin/conexoes/${row.id}`, { method: "DELETE" });
-    if (res.ok) fetchData();
+    if (res.ok) { toast.success("Conexão excluída"); fetchData(); } else toast.error("Erro ao excluir");
   };
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const testFromList = async (row: Conexao) => {
     setTestingId(row.id);
@@ -143,7 +157,7 @@ export default function ConexoesPage() {
       body: JSON.stringify({ id: row.id }),
     });
     const result = await res.json();
-    alert(result.ok ? "Conexão OK!" : `Erro: ${result.message}`);
+    toast[result.ok ? "success" : "error"](result.ok ? "Conexão OK!" : `Erro: ${result.message}`);
     setTestingId(null);
   };
 
@@ -179,6 +193,16 @@ export default function ConexoesPage() {
           data={data}
           keyExtractor={(r) => r.id}
           emptyMessage="Nenhuma conexão. Cadastre clientes primeiro."
+        />
+      )}
+      {total > 0 && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalItems={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
         />
       )}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Editar conexão" : "Nova conexão"} maxWidth="lg">

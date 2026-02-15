@@ -25,7 +25,7 @@ export async function getToolsForUser(userId: string): Promise<{ id: string; nam
   const seen = new Set<string>();
   const tools: { id: string; name: string; slug: string; clientId: string }[] = [];
   for (const ct of clientTools) {
-    if (ct.tool.status === "active" && !seen.has(ct.tool.id)) {
+    if (ct.tool.status === "active" && ct.tool.type !== "powerbi_report" && !seen.has(ct.tool.id)) {
       seen.add(ct.tool.id);
       tools.push({ id: ct.tool.id, name: ct.tool.name, slug: ct.tool.slug, clientId: ct.tool.clientId });
     }
@@ -36,4 +36,55 @@ export async function getToolsForUser(userId: string): Promise<{ id: string; nam
 export async function canUserAccessTool(userId: string, toolId: string): Promise<boolean> {
   const tools = await getToolsForUser(userId);
   return tools.some((t) => t.id === toolId);
+}
+
+export type ReportForUser = {
+  id: string;
+  name: string;
+  slug: string;
+  clientId: string;
+  client: { name: string; logoUrl: string | null };
+};
+
+export async function getReportsForUser(userId: string): Promise<ReportForUser[]> {
+  const [groupPerms, sectorPerms] = await Promise.all([
+    prisma.userGroupPermission.findMany({ where: { userId }, select: { groupId: true } }),
+    prisma.userSectorPermission.findMany({ where: { userId }, select: { sectorId: true } }),
+  ]);
+  const groupIds = groupPerms.map((p) => p.groupId);
+  const sectorIds = sectorPerms.map((p) => p.sectorId);
+
+  const toolPerms = await prisma.toolPermission.findMany({
+    where: {
+      tool: { type: "powerbi_report", status: "active" },
+      OR: [
+        { principalType: "user", principalId: userId },
+        ...(groupIds.length ? [{ principalType: "group" as const, principalId: { in: groupIds } }] : []),
+        ...(sectorIds.length ? [{ principalType: "sector" as const, principalId: { in: sectorIds } }] : []),
+      ],
+    },
+    include: { tool: { include: { client: { select: { name: true, logoUrl: true } } } } },
+  });
+
+  const seen = new Set<string>();
+  const reports: ReportForUser[] = [];
+  for (const tp of toolPerms) {
+    const t = tp.tool;
+    if (t && !seen.has(t.id)) {
+      seen.add(t.id);
+      reports.push({
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        clientId: t.clientId,
+        client: { name: t.client.name, logoUrl: t.client.logoUrl },
+      });
+    }
+  }
+  return reports;
+}
+
+export async function canUserAccessReport(userId: string, toolId: string): Promise<boolean> {
+  const reports = await getReportsForUser(userId);
+  return reports.some((r) => r.id === toolId);
 }

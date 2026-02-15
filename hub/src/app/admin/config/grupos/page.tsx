@@ -2,15 +2,20 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { IconPlus, IconPencil, IconTrash } from "@tabler/icons-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
+import { Pagination } from "@/components/ui/Pagination";
 
 type Group = { id: string; name: string; clientId: string; client: { name: string } };
 
 export default function GruposPage() {
   const [data, setData] = useState<Group[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [clientes, setClientes] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -20,11 +25,18 @@ export default function GruposPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [gRes, cRes] = await Promise.all([fetch("/api/admin/grupos"), fetch("/api/admin/clientes")]);
-    if (gRes.ok) setData(await gRes.json());
+    const [gRes, cRes] = await Promise.all([
+      fetch(`/api/admin/grupos?page=${page}&limit=${pageSize}`),
+      fetch("/api/admin/clientes"),
+    ]);
+    if (gRes.ok) {
+      const json = await gRes.json();
+      setData(json.data ?? json);
+      setTotal(json.total ?? json.data?.length ?? json.length ?? 0);
+    }
     if (cRes.ok) setClientes(await cRes.json());
     setLoading(false);
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -42,21 +54,23 @@ export default function GruposPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.clientId) { alert("Selecione um cliente"); return; }
+    if (!form.clientId) { toast.error("Selecione um cliente"); return; }
     setSaving(true);
     try {
       const url = editing ? `/api/admin/grupos/${editing.id}` : "/api/admin/grupos";
       const method = editing ? "PATCH" : "POST";
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-      if (res.ok) { setModalOpen(false); fetchData(); } else alert((await res.json()).error || "Erro");
+      if (res.ok) { toast.success(editing ? "Grupo atualizado!" : "Grupo criado!"); setModalOpen(false); fetchData(); } else toast.error((await res.json()).error || "Erro");
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (row: Group) => {
     if (!confirm(`Excluir grupo "${row.name}"?`)) return;
     const res = await fetch(`/api/admin/grupos/${row.id}`, { method: "DELETE" });
-    if (res.ok) fetchData();
+    if (res.ok) { toast.success("Grupo excluído"); fetchData(); } else toast.error("Erro ao excluir");
   };
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div>
@@ -81,6 +95,16 @@ export default function GruposPage() {
           data={data}
           keyExtractor={(r) => r.id}
           emptyMessage="Nenhum grupo. Cadastre clientes primeiro."
+        />
+      )}
+      {total > 0 && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalItems={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
         />
       )}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Editar grupo" : "Novo grupo"}>

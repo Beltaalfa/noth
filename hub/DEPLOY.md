@@ -46,6 +46,21 @@ Se usar HostGator com Node.js:
 - Use o banco PostgreSQL do HostGator ou externo
 - O start command deve ser: `npm start` ou `node .next/standalone/server.js` (se usar output: 'standalone')
 
+## Backup do banco de dados
+
+Script para backup automatizado do PostgreSQL:
+
+```bash
+./scripts/backup-postgres.sh [pasta_destino]
+```
+
+Por padrão, os backups são salvos em `hub/backups/` (criado automaticamente). Backups com mais de 7 dias são removidos.
+
+**Cron (diário às 2h):**
+```cron
+0 2 * * * /var/www/north/hub/scripts/backup-postgres.sh
+```
+
 ## Proxy reverso (Nginx)
 
 Se usar Nginx na frente do Node:

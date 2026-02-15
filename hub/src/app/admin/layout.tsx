@@ -8,6 +8,8 @@ import {
   IconBuilding,
   IconDatabase,
   IconTools,
+  IconReport,
+  IconChartBar,
   IconList,
 } from "@tabler/icons-react";
 
@@ -29,6 +31,8 @@ export default async function AdminLayout({
     { href: "/admin/config/setores", label: "Setores", icon: <IconBuilding /> },
     { href: "/admin/config/conexoes", label: "Conexões de Banco", icon: <IconDatabase /> },
     { href: "/admin/config/ferramentas", label: "Ferramentas", icon: <IconTools /> },
+    { href: "/admin/config/relatorios", label: "Relatórios", icon: <IconReport /> },
+    { href: "/admin/audit-relatorios", label: "Auditoria de Relatórios", icon: <IconChartBar /> },
     { href: "/admin/logs", label: "Logs", icon: <IconList /> },
   ];
 

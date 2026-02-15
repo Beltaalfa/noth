@@ -12,13 +12,35 @@ const createSchema = z.object({
   role: z.enum(["client", "admin"]).default("client"),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
   if (!session || (session.user as { role?: string })?.role !== "admin") {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const page = searchParams.get("page");
+  const limit = searchParams.get("limit");
+
+  if (page && limit) {
+    const p = Math.max(1, Number(page) || 1);
+    const l = Math.min(100, Math.max(1, Number(limit)) || 25);
+    const skip = (p - 1) * l;
+    const [data, total] = await Promise.all([
+      prisma.user.findMany({
+        where: { deletedAt: null },
+        orderBy: { name: "asc" },
+        skip,
+        take: l,
+        select: { id: true, name: true, email: true, status: true, role: true, createdAt: true },
+      }),
+      prisma.user.count({ where: { deletedAt: null } }),
+    ]);
+    return NextResponse.json({ data, total });
+  }
+
   const usuarios = await prisma.user.findMany({
+    where: { deletedAt: null },
     orderBy: { name: "asc" },
     select: { id: true, name: true, email: true, status: true, role: true, createdAt: true },
   });
@@ -37,7 +59,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Dados inválidos", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const exists = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+  const exists = await prisma.user.findFirst({
+    where: { email: parsed.data.email, deletedAt: null },
+  });
   if (exists) {
     return NextResponse.json({ error: "Email já cadastrado" }, { status: 400 });
   }

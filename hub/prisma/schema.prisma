@@ -26,40 +26,54 @@ enum DbConnectionType {
 
 enum ToolType {
   report
+  powerbi_report
   integration
   query_runner
   app
 }
 
+enum PrincipalType {
+  user
+  group
+  sector
+}
+
 model User {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   name         String
-  email        String   @unique
+  email        String    @unique
   passwordHash String
-  role         UserRole @default(client)
-  status       Status   @default(active)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role         UserRole  @default(client)
+  status       Status    @default(active)
+  deletedAt    DateTime? // Soft delete
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   userClientPermissions UserClientPermission[]
   userGroupPermissions  UserGroupPermission[]
   userSectorPermissions UserSectorPermission[]
   userToolPermissions   UserToolPermission[]
   auditLogs             AuditLog[]
+
+  @@index([deletedAt])
 }
 
 model Client {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   name      String
-  status    Status   @default(active)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  logoUrl   String?   // Caminho: /uploads/logos/xxx.png
+  status    Status    @default(active)
+  deletedAt DateTime? // Soft delete
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   groups         Group[]
   dbConnections  DbConnection[]
   tools          Tool[]
   userPermissions UserClientPermission[]
   clientTools     ClientTool[]
+
+  @@index([deletedAt])
 }
 
 model Group {
@@ -119,16 +133,32 @@ model Tool {
   slug            String
   description     String?
   type            ToolType @default(report)
+  powerbiUrl      String?  // URL do relatório Power BI/Fabric
   status          Status   @default(active)
   scriptConfig    String?  // JSON: configuração de script/query
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  userPermissions UserToolPermission[]
-  clientTools     ClientTool[]
+  userPermissions   UserToolPermission[]
+  clientTools       ClientTool[]
+  toolPermissions   ToolPermission[]
 
   @@unique([clientId, slug])
   @@index([clientId])
+}
+
+// Permissões ferramenta -> usuário/grupo/setor (para relatórios)
+model ToolPermission {
+  id             String       @id @default(cuid())
+  toolId         String
+  tool           Tool         @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  principalType  PrincipalType
+  principalId    String
+  createdAt      DateTime     @default(now())
+
+  @@unique([toolId, principalType, principalId])
+  @@index([toolId])
+  @@index([principalType, principalId])
 }
 
 // Permissões usuário <-> cliente

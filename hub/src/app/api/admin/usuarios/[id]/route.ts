@@ -22,8 +22,8 @@ export async function GET(
   }
 
   const { id } = await params;
-  const user = await prisma.user.findUnique({
-    where: { id },
+  const user = await prisma.user.findFirst({
+    where: { id, deletedAt: null },
     select: { id: true, name: true, email: true, status: true, role: true },
   });
   if (!user) return NextResponse.json({ error: "Não encontrado" }, { status: 404 });
@@ -54,7 +54,11 @@ export async function PATCH(
 
   if (parsed.data.email) {
     const exists = await prisma.user.findFirst({
-      where: { email: parsed.data.email, NOT: { id } },
+      where: {
+        email: parsed.data.email,
+        id: { not: id },
+        deletedAt: null,
+      },
     });
     if (exists) {
       return NextResponse.json({ error: "Email já cadastrado" }, { status: 400 });
@@ -79,6 +83,9 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  await prisma.user.delete({ where: { id } });
+  await prisma.user.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
   return NextResponse.json({ ok: true });
 }

@@ -2,15 +2,20 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { IconPlus, IconPencil, IconTrash } from "@tabler/icons-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
+import { Pagination } from "@/components/ui/Pagination";
 
 type Sector = { id: string; name: string; groupId: string; group: { name: string; client?: { name: string } } };
 
 export default function SetoresPage() {
   const [data, setData] = useState<Sector[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [grupos, setGrupos] = useState<{ id: string; name: string; clientId: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -20,11 +25,18 @@ export default function SetoresPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [sRes, gRes] = await Promise.all([fetch("/api/admin/setores"), fetch("/api/admin/grupos")]);
-    if (sRes.ok) setData(await sRes.json());
+    const [sRes, gRes] = await Promise.all([
+      fetch(`/api/admin/setores?page=${page}&limit=${pageSize}`),
+      fetch("/api/admin/grupos"),
+    ]);
+    if (sRes.ok) {
+      const json = await sRes.json();
+      setData(json.data ?? json);
+      setTotal(json.total ?? json.data?.length ?? json.length ?? 0);
+    }
     if (gRes.ok) setGrupos(await gRes.json());
     setLoading(false);
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -42,21 +54,23 @@ export default function SetoresPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.groupId) { alert("Selecione um grupo"); return; }
+    if (!form.groupId) { toast.error("Selecione um grupo"); return; }
     setSaving(true);
     try {
       const url = editing ? `/api/admin/setores/${editing.id}` : "/api/admin/setores";
       const method = editing ? "PATCH" : "POST";
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-      if (res.ok) { setModalOpen(false); fetchData(); } else alert((await res.json()).error || "Erro");
+      if (res.ok) { toast.success(editing ? "Setor atualizado!" : "Setor criado!"); setModalOpen(false); fetchData(); } else toast.error((await res.json()).error || "Erro");
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (row: Sector) => {
     if (!confirm(`Excluir setor "${row.name}"?`)) return;
     const res = await fetch(`/api/admin/setores/${row.id}`, { method: "DELETE" });
-    if (res.ok) fetchData();
+    if (res.ok) { toast.success("Setor excluído"); fetchData(); } else toast.error("Erro ao excluir");
   };
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div>
@@ -81,6 +95,16 @@ export default function SetoresPage() {
           data={data}
           keyExtractor={(r) => r.id}
           emptyMessage="Nenhum setor. Cadastre grupos primeiro."
+        />
+      )}
+      {total > 0 && (
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          totalItems={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
         />
       )}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Editar setor" : "Novo setor"}>

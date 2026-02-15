@@ -1,16 +1,13 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { logAudit } from "@/lib/audit";
 import { z } from "zod";
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
-  slug: z.string().min(1).optional(),
-  description: z.string().optional(),
-  type: z.enum(["report", "powerbi_report", "integration", "query_runner", "app"]).optional(),
-  powerbiUrl: z.string().optional().nullable(),
+  logoUrl: z.string().optional().nullable(),
   status: z.enum(["active", "inactive"]).optional(),
-  dbConnectionId: z.string().nullable().optional(),
 });
 
 export async function PATCH(
@@ -24,13 +21,22 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
   const parsed = updateSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Dados inválidos" }, { status: 400 });
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Dados inválidos", details: parsed.error.flatten() }, { status: 400 });
+  }
 
-  const tool = await prisma.tool.update({
+  const cliente = await prisma.client.update({
     where: { id },
     data: parsed.data,
   });
-  return NextResponse.json(tool);
+  await logAudit({
+    userId: (session.user as { id?: string })?.id,
+    action: "update",
+    entity: "Client",
+    entityId: id,
+    details: JSON.stringify({ name: cliente.name }),
+  });
+  return NextResponse.json(cliente);
 }
 
 export async function DELETE(
@@ -42,6 +48,16 @@ export async function DELETE(
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
   const { id } = await params;
-  await prisma.tool.delete({ where: { id } });
+  await prisma.client.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+  await logAudit({
+    userId: (session.user as { id?: string })?.id,
+    action: "delete",
+    entity: "Client",
+    entityId: id,
+    details: "soft_delete",
+  });
   return NextResponse.json({ ok: true });
 }

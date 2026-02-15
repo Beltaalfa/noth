@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { IconPlus, IconPencil, IconTrash, IconKey } from "@tabler/icons-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
+import { Pagination } from "@/components/ui/Pagination";
 
 type User = { id: string; name: string; email: string; status: string; role: string };
 
@@ -58,7 +60,7 @@ function PermissoesModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "userClient", userId: user.id, clientId: selClient }),
     });
-    if (res.ok) { setSelClient(""); fetchPerm(); onUpdate(); } else alert((await res.json()).error || "Erro");
+    if (res.ok) { setSelClient(""); fetchPerm(); onUpdate(); } else toast.error((await res.json()).error || "Erro");
   };
   const addGroup = async () => {
     if (!selGroup) return;
@@ -67,7 +69,7 @@ function PermissoesModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "userGroup", userId: user.id, groupId: selGroup }),
     });
-    if (res.ok) { setSelGroup(""); fetchPerm(); onUpdate(); } else alert((await res.json()).error || "Erro");
+    if (res.ok) { setSelGroup(""); fetchPerm(); onUpdate(); } else toast.error((await res.json()).error || "Erro");
   };
   const addSector = async () => {
     if (!selSector) return;
@@ -76,7 +78,7 @@ function PermissoesModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "userSector", userId: user.id, sectorId: selSector }),
     });
-    if (res.ok) { setSelSector(""); fetchPerm(); onUpdate(); } else alert((await res.json()).error || "Erro");
+    if (res.ok) { setSelSector(""); fetchPerm(); onUpdate(); } else toast.error((await res.json()).error || "Erro");
   };
 
   const removePerm = async (action: "userClient" | "userGroup" | "userSector", id: string) => {
@@ -172,6 +174,9 @@ function PermissoesModal({
 
 export default function UsuariosPage() {
   const [data, setData] = useState<User[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
@@ -187,10 +192,14 @@ export default function UsuariosPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/admin/usuarios");
-    if (res.ok) setData(await res.json());
+    const res = await fetch(`/api/admin/usuarios?page=${page}&limit=${pageSize}`);
+    if (res.ok) {
+      const json = await res.json();
+      setData(json.data ?? json);
+      setTotal(json.total ?? json.data?.length ?? json.length ?? 0);
+    }
     setLoading(false);
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -215,14 +224,14 @@ export default function UsuariosPage() {
       const body: Record<string, unknown> = { ...form };
       if (editing && !body.password) delete body.password;
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (res.ok) { setModalOpen(false); fetchData(); } else alert((await res.json()).error || "Erro");
+      if (res.ok) { toast.success(editing ? "Usuário atualizado!" : "Usuário criado!"); setModalOpen(false); fetchData(); } else toast.error((await res.json()).error || "Erro");
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (row: User) => {
     if (!confirm(`Excluir "${row.name}"?`)) return;
     const res = await fetch(`/api/admin/usuarios/${row.id}`, { method: "DELETE" });
-    if (res.ok) fetchData();
+    if (res.ok) { toast.success("Usuário excluído"); fetchData(); } else toast.error("Erro ao excluir");
   };
 
   return (
@@ -250,6 +259,16 @@ export default function UsuariosPage() {
           ]}
           data={data}
           keyExtractor={(r) => r.id}
+        />
+      )}
+      {total > 0 && (
+        <Pagination
+          page={page}
+          totalPages={Math.max(1, Math.ceil(total / pageSize))}
+          totalItems={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
         />
       )}
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Editar usuário" : "Novo usuário"}>

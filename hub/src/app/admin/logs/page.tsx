@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Table } from "@/components/ui/Table";
+import { Pagination } from "@/components/ui/Pagination";
 
 type Log = {
   id: string;
@@ -15,17 +16,22 @@ type Log = {
 
 export default function LogsPage() {
   const [data, setData] = useState<Log[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/admin/logs");
+    const offset = (page - 1) * pageSize;
+    const res = await fetch(`/api/admin/logs?limit=${pageSize}&offset=${offset}`);
     if (res.ok) {
       const json = await res.json();
       setData(json.logs);
+      setTotal(json.total ?? 0);
     }
     setLoading(false);
-  }, []);
+  }, [page, pageSize]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -47,6 +53,16 @@ export default function LogsPage() {
           data={data}
           keyExtractor={(r) => r.id}
           emptyMessage="Nenhum log registrado."
+        />
+      )}
+      {total > 0 && (
+        <Pagination
+          page={page}
+          totalPages={Math.max(1, Math.ceil(total / pageSize))}
+          totalItems={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
         />
       )}
     </div>

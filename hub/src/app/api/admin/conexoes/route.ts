@@ -22,8 +22,30 @@ export async function GET(request: Request) {
   }
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get("clientId");
+  const page = searchParams.get("page");
+  const limit = searchParams.get("limit");
+
+  const where = clientId ? { clientId } : {};
+
+  if (page && limit) {
+    const p = Math.max(1, Number(page) || 1);
+    const l = Math.min(100, Math.max(1, Number(limit)) || 25);
+    const skip = (p - 1) * l;
+    const [data, total] = await Promise.all([
+      prisma.dbConnection.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: l,
+        include: { client: { select: { name: true } } },
+      }),
+      prisma.dbConnection.count({ where }),
+    ]);
+    return NextResponse.json({ data, total });
+  }
+
   const conexoes = await prisma.dbConnection.findMany({
-    where: clientId ? { clientId } : undefined,
+    where,
     orderBy: { createdAt: "desc" },
     include: { client: { select: { name: true } } },
   });

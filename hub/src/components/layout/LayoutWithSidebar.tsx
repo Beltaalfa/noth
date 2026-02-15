@@ -18,18 +18,22 @@ export function LayoutWithSidebar({
 }: LayoutWithSidebarProps) {
   return (
     <div className="min-h-screen flex">
-      <Sidebar items={sidebarItems} title={title} />
-      <main className="flex-1 ml-64 min-h-screen flex flex-col">
-        <header className="h-16 border-b border-zinc-800 flex items-center justify-end px-6">
+      <Sidebar
+        items={sidebarItems}
+        title={title}
+        footer={
           <Button
             variant="ghost"
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="gap-2"
+            className="w-full justify-start gap-3 text-zinc-400 hover:text-zinc-200"
           >
-            <IconLogout size={18} strokeWidth={2} />
+            <IconLogout size={20} strokeWidth={2} />
             Sair
           </Button>
-        </header>
+        }
+      />
+      <main className="flex-1 ml-64 min-h-screen flex flex-col">
+        <header className="h-16 border-b border-zinc-800 shrink-0" />
         <div className="flex-1 p-6 lg:p-8">{children}</div>
       </main>
     </div>

@@ -16,9 +16,23 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get("clientId");
+  const page = searchParams.get("page");
+  const limit = searchParams.get("limit");
+  const where = clientId ? { clientId } : undefined;
+
+  if (page && limit) {
+    const p = Math.max(1, Number(page) || 1);
+    const l = Math.min(100, Math.max(1, Number(limit)) || 25);
+    const skip = (p - 1) * l;
+    const [data, total] = await Promise.all([
+      prisma.group.findMany({ where, orderBy: { name: "asc" }, skip, take: l, include: { client: { select: { name: true } } } }),
+      prisma.group.count({ where: where ?? {} }),
+    ]);
+    return NextResponse.json({ data, total });
+  }
 
   const grupos = await prisma.group.findMany({
-    where: clientId ? { clientId } : undefined,
+    where,
     orderBy: { name: "asc" },
     include: { client: { select: { name: true } } },
   });

@@ -14,14 +14,15 @@ interface SidebarProps {
   items: SidebarItem[];
   title?: string;
   logo?: ReactNode;
+  footer?: ReactNode;
 }
 
-export function Sidebar({ items, title = "Hub", logo }: SidebarProps) {
+export function Sidebar({ items, title = "Hub", logo, footer }: SidebarProps) {
   const pathname = usePathname();
 
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 flex flex-col border-r border-zinc-800 bg-black">
-      <div className="flex h-16 items-center gap-2 border-b border-zinc-800 px-6">
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-zinc-800 px-6">
         {logo || (
           <span className="text-lg font-semibold text-zinc-100">{title}</span>
         )}
@@ -54,6 +55,11 @@ export function Sidebar({ items, title = "Hub", logo }: SidebarProps) {
           })}
         </ul>
       </nav>
+      {footer ? (
+        <div className="shrink-0 border-t border-zinc-800 p-4">
+          {footer}
+        </div>
+      ) : null}
     </aside>
   );
 }
