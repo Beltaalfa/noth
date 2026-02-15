@@ -1,0 +1,217 @@
+// Hub - Portal Clientes + Admin
+// Banco principal do sistema (PostgreSQL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  client
+  admin
+}
+
+enum Status {
+  active
+  inactive
+}
+
+enum DbConnectionType {
+  postgres
+  firebird
+}
+
+enum ToolType {
+  report
+  integration
+  query_runner
+  app
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(client)
+  status       Status   @default(active)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userClientPermissions UserClientPermission[]
+  userGroupPermissions  UserGroupPermission[]
+  userSectorPermissions UserSectorPermission[]
+  userToolPermissions   UserToolPermission[]
+  auditLogs             AuditLog[]
+}
+
+model Client {
+  id        String   @id @default(cuid())
+  name      String
+  status    Status   @default(active)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  groups         Group[]
+  dbConnections  DbConnection[]
+  tools          Tool[]
+  userPermissions UserClientPermission[]
+  clientTools     ClientTool[]
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sectors   Sector[]
+  userPermissions UserGroupPermission[]
+
+  @@index([clientId])
+}
+
+model Sector {
+  id        String   @id @default(cuid())
+  name      String
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userPermissions UserSectorPermission[]
+
+  @@index([groupId])
+}
+
+model DbConnection {
+  id          String            @id @default(cuid())
+  clientId    String
+  client      Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  type        DbConnectionType
+  host        String
+  port        Int
+  user        String
+  password    String            // Criptografado
+  database    String
+  extraParams String?           // JSON string para parâmetros extras
+  status      Status            @default(active)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  tools           Tool[]
+
+  @@index([clientId])
+}
+
+model Tool {
+  id              String   @id @default(cuid())
+  clientId        String
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  dbConnectionId  String?
+  dbConnection    DbConnection? @relation(fields: [dbConnectionId], references: [id], onDelete: SetNull)
+  name            String
+  slug            String
+  description     String?
+  type            ToolType @default(report)
+  status          Status   @default(active)
+  scriptConfig    String?  // JSON: configuração de script/query
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  userPermissions UserToolPermission[]
+  clientTools     ClientTool[]
+
+  @@unique([clientId, slug])
+  @@index([clientId])
+}
+
+// Permissões usuário <-> cliente
+model UserClientPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, clientId])
+  @@index([userId])
+  @@index([clientId])
+}
+
+// Permissões usuário <-> grupo
+model UserGroupPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
+}
+
+// Permissões usuário <-> setor
+model UserSectorPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sectorId  String
+  sector    Sector   @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, sectorId])
+  @@index([userId])
+  @@index([sectorId])
+}
+
+// Permissões usuário <-> ferramenta (opcional, granulação extra)
+model UserToolPermission {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolId    String
+  tool      Tool     @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, toolId])
+  @@index([userId])
+  @@index([toolId])
+}
+
+// Cliente <-> Ferramentas (N:N)
+model ClientTool {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  toolId    String
+  tool      Tool     @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([clientId, toolId])
+  @@index([clientId])
+  @@index([toolId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String   // create, update, delete, login, etc.
+  entity    String   // User, Client, Group, etc.
+  entityId  String?
+  details   String?  // JSON
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+}

@@ -1,0 +1,54 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { Table } from "@/components/ui/Table";
+
+type Log = {
+  id: string;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  details: string | null;
+  createdAt: string;
+  user: { name: string; email: string } | null;
+};
+
+export default function LogsPage() {
+  const [data, setData] = useState<Log[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch("/api/admin/logs");
+    if (res.ok) {
+      const json = await res.json();
+      setData(json.logs);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  return (
+    <div>
+      <h1 className="text-2xl font-bold text-zinc-100 mb-6">Logs / Auditoria</h1>
+      {loading ? (
+        <p className="text-zinc-500">Carregando...</p>
+      ) : (
+        <Table<Log>
+          columns={[
+            { key: "createdAt", header: "Data", render: (r) => new Date(r.createdAt).toLocaleString("pt-BR") },
+            { key: "user", header: "Usuário", render: (r) => r.user ? `${r.user.name} (${r.user.email})` : "-" },
+            { key: "action", header: "Ação" },
+            { key: "entity", header: "Entidade" },
+            { key: "entityId", header: "ID", render: (r) => r.entityId ?? "-" },
+            { key: "details", header: "Detalhes", render: (r) => r.details ?? "-" },
+          ]}
+          data={data}
+          keyExtractor={(r) => r.id}
+          emptyMessage="Nenhum log registrado."
+        />
+      )}
+    </div>
+  );
+}
