@@ -88,3 +88,107 @@ export async function canUserAccessReport(userId: string, toolId: string): Promi
   const reports = await getReportsForUser(userId);
   return reports.some((r) => r.id === toolId);
 }
+
+export async function getClientsForUser(userId: string): Promise<{ id: string; name: string }[]> {
+  const clientIds = await getClientIdsForUser(userId);
+  if (clientIds.size === 0) return [];
+
+  const clients = await prisma.client.findMany({
+    where: { id: { in: Array.from(clientIds) }, deletedAt: null, status: "active" },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  return clients;
+}
+
+export type AlteracaoDespesaTool = {
+  id: string;
+  clientId: string;
+  client: { id: string; name: string };
+};
+
+export async function getAlteracaoDespesaToolsForUser(
+  userId: string
+): Promise<AlteracaoDespesaTool[]> {
+  const [groupPerms, sectorPerms] = await Promise.all([
+    prisma.userGroupPermission.findMany({ where: { userId }, select: { groupId: true } }),
+    prisma.userSectorPermission.findMany({ where: { userId }, select: { sectorId: true } }),
+  ]);
+  const groupIds = groupPerms.map((p) => p.groupId);
+  const sectorIds = sectorPerms.map((p) => p.sectorId);
+
+  const clientIds = await getClientIdsForUser(userId);
+
+  const toolPerms = await prisma.toolPermission.findMany({
+    where: {
+      tool: { slug: "alteracao-despesa", status: "active", clientId: { in: Array.from(clientIds) } },
+      OR: [
+        { principalType: "user", principalId: userId },
+        ...(groupIds.length ? [{ principalType: "group" as const, principalId: { in: groupIds } }] : []),
+        ...(sectorIds.length ? [{ principalType: "sector" as const, principalId: { in: sectorIds } }] : []),
+      ],
+    },
+    include: { tool: { include: { client: { select: { id: true, name: true } } } } },
+  });
+
+  const seen = new Set<string>();
+  const tools: AlteracaoDespesaTool[] = [];
+  for (const tp of toolPerms) {
+    const t = tp.tool;
+    if (t?.client && !seen.has(t.id)) {
+      seen.add(t.id);
+      tools.push({
+        id: t.id,
+        clientId: t.clientId,
+        client: { id: t.client.id, name: t.client.name },
+      });
+    }
+  }
+  return tools;
+}
+
+export async function canUserAccessAlteracaoDespesa(
+  userId: string,
+  toolId: string,
+  clientId: string
+): Promise<boolean> {
+  const clientIds = await getClientIdsForUser(userId);
+  if (!clientIds.has(clientId)) return false;
+
+  const tools = await getAlteracaoDespesaToolsForUser(userId);
+  return tools.some((t) => t.id === toolId && t.clientId === clientId);
+}
+
+export async function canUserAccessAlteracaoDespesaForClient(
+  userId: string,
+  clientId: string
+): Promise<boolean> {
+  const tools = await getAlteracaoDespesaToolsForUser(userId);
+  return tools.some((t) => t.clientId === clientId);
+}
+
+/** Acesso direto à Alteração de Despesa - admin sempre; ou usuário com acesso ao cliente PMG */
+export async function canUserAccessAlteracaoDespesaPmg(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
+  if (user?.role === "admin") return true;
+
+  const clientIds = await getClientIdsForUser(userId);
+  if (clientIds.size === 0) return false;
+
+  const pmgClient = await prisma.client.findFirst({
+    where: {
+      id: { in: Array.from(clientIds) },
+      deletedAt: null,
+      status: "active",
+      OR: [
+        { name: { contains: "PMG", mode: "insensitive" } },
+        { name: { contains: "Rede PMG", mode: "insensitive" } },
+      ],
+    },
+    select: { id: true },
+  });
+  return !!pmgClient;
+}
