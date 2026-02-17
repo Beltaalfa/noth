@@ -1,0 +1,55 @@
+import { auth } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { canUserAccessTicket } from "@/lib/helpdesk";
+
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  const userId = (session.user as { id?: string })?.id;
+  if (!userId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
+
+  const { id: ticketId } = await context.params;
+  const canAccess = await canUserAccessTicket(userId, ticketId);
+  if (!canAccess) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+
+  let body: { content: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Body inválido" }, { status: 400 });
+  }
+  const content = body.content;
+  if (!content?.trim()) return NextResponse.json({ error: "content é obrigatório" }, { status: 400 });
+
+  const message = await prisma.helpdeskMessage.create({
+    data: { ticketId, userId, content: content.trim() },
+    include: { user: { select: { id: true, name: true } }, attachments: true },
+  });
+  await prisma.helpdeskTicket.update({ where: { id: ticketId }, data: { status: "in_progress", updatedAt: new Date() } });
+  const ticket = await prisma.helpdeskTicket.findUnique({ where: { id: ticketId }, select: { assigneeType: true, assigneeUserId: true, assigneeGroupId: true, assigneeSectorId: true } });
+  if (ticket) {
+    const userIdsToNotify = new Set<string>();
+    if (ticket.assigneeType === "user" && ticket.assigneeUserId && ticket.assigneeUserId !== userId) userIdsToNotify.add(ticket.assigneeUserId);
+    if (ticket.assigneeType === "group" && ticket.assigneeGroupId) {
+      const perms = await prisma.userGroupPermission.findMany({ where: { groupId: ticket.assigneeGroupId }, select: { userId: true } });
+      perms.forEach((p) => userIdsToNotify.add(p.userId));
+    }
+    if (ticket.assigneeType === "sector" && ticket.assigneeSectorId) {
+      const perms = await prisma.userSectorPermission.findMany({ where: { sectorId: ticket.assigneeSectorId }, select: { userId: true } });
+      perms.forEach((p) => userIdsToNotify.add(p.userId));
+    }
+    const creatorTicket = await prisma.helpdeskTicket.findUnique({ where: { id: ticketId }, select: { createdById: true } });
+    if (creatorTicket && creatorTicket.createdById !== userId) userIdsToNotify.add(creatorTicket.createdById);
+    userIdsToNotify.delete(userId);
+    if (userIdsToNotify.size > 0) {
+      await prisma.helpdeskNotification.createMany({
+        data: Array.from(userIdsToNotify).map((uid) => ({ userId: uid, ticketId, messageId: message.id, type: "new_message" })),
+      });
+    }
+  }
+  return NextResponse.json(message);
+}

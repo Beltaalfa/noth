@@ -22,19 +22,28 @@ export async function getPmgDbConnection(): Promise<ClientDbCredentials> {
         { name: { contains: "Rede PMG", mode: "insensitive" } },
       ],
     },
-    include: { dbConnections: { where: { type: "postgres", status: "active" }, take: 1 } },
+    select: { id: true },
   });
-  const conn = client?.dbConnections?.[0];
-  if (!conn) {
-    throw new Error("Nenhuma conexão PostgreSQL ativa encontrada para o cliente PMG");
+  if (!client) {
+    throw new Error("Cliente PMG não encontrado. Crie o cliente PMG em Admin → Clientes.");
   }
-  return {
-    host: conn.host,
-    port: conn.port,
-    user: conn.user,
-    password: conn.password,
-    database: conn.database,
-  };
+  try {
+    return await getClientDbConnection(client.id, "alteracao-despesa");
+  } catch {
+    const conn = await prisma.dbConnection.findFirst({
+      where: { clientId: client.id, type: "postgres", status: "active" },
+    });
+    if (!conn) {
+      throw new Error("Nenhuma conexão PostgreSQL ativa encontrada para o cliente PMG. Configure em Admin → Conexões de Banco.");
+    }
+    return {
+      host: conn.host,
+      port: conn.port,
+      user: conn.user,
+      password: conn.password,
+      database: conn.database,
+    };
+  }
 }
 
 export async function getPmgClientId(): Promise<string | null> {

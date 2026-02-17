@@ -31,6 +31,7 @@ export function AlteracaoDespesaForm() {
   const [loading, setLoading] = useState(true);
   const [aplicando, setAplicando] = useState(false);
   const [modalConfirm, setModalConfirm] = useState(false);
+  const [erroConexao, setErroConexao] = useState<string | null>(null);
 
   const handleSeqInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value.replace(/[^\d,]/g, "");
@@ -41,6 +42,7 @@ export function AlteracaoDespesaForm() {
 
   const fetchDados = useCallback(async () => {
     setLoading(true);
+    setErroConexao(null);
     try {
       const [ccRes, tdRes, desRes] = await Promise.all([
         fetch("/api/tools/despesa/centros-custo"),
@@ -55,8 +57,14 @@ export function AlteracaoDespesaForm() {
           return [];
         }
       };
-      setCentros(ccRes.ok ? await parseJson(ccRes) : []);
-      setTipos(tdRes.ok ? await parseJson(tdRes) : []);
+      const ccData = ccRes.ok ? await parseJson(ccRes) : [];
+      const tdData = tdRes.ok ? await parseJson(tdRes) : [];
+      if (!ccRes.ok || !tdRes.ok) {
+        const errBody = await ccRes.json().catch(() => tdRes.json().catch(() => ({})));
+        setErroConexao(errBody?.error ?? "Erro ao conectar ao banco PMG.");
+      }
+      setCentros(ccData);
+      setTipos(tdData);
       setDespesas(desRes.ok ? await parseJson(desRes) : []);
       setSeqInput("");
       setAlterarCentro(false);
@@ -133,6 +141,12 @@ export function AlteracaoDespesaForm() {
       {loading ? (
         <div className="rounded-xl border border-zinc-700/50 bg-zinc-900/30 px-6 py-12 text-center text-zinc-500">
           Carregando dados...
+        </div>
+      ) : centros.length === 0 && tipos.length === 0 ? (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-6 py-8">
+          <p className="text-amber-400 font-medium">Centros de custo e tipos de despesa não disponíveis</p>
+          {erroConexao && <p className="mt-2 text-sm text-red-400">{erroConexao}</p>}
+          <p className="mt-2 text-sm text-zinc-400">Configure em Admin → Conexões de Banco. O banco deve ter as tabelas tab_centro_custo e tab_tipo_despesa.</p>
         </div>
       ) : (
         <div className="space-y-6">

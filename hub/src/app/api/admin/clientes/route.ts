@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       status: parsed.data.status as "active" | "inactive",
     },
   });
+
   await logAudit({
     userId: (session.user as { id?: string })?.id,
     action: "create",

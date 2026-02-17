@@ -33,12 +33,20 @@ export async function POST(request: Request) {
   const safeExt = ["png", "jpeg", "jpg", "svg"].includes(ext) ? ext : "png";
   const filename = `${crypto.randomUUID()}.${safeExt}`;
 
-  const dir = path.join(process.cwd(), "public", "uploads", "logos");
-  await mkdir(dir, { recursive: true });
-  const filepath = path.join(dir, filename);
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await writeFile(filepath, buffer);
-
-  const publicPath = `/uploads/logos/${filename}`;
-  return NextResponse.json({ path: publicPath });
+  try {
+    const dir = path.resolve(process.cwd(), "public", "uploads", "logos");
+    await mkdir(dir, { recursive: true });
+    const filepath = path.join(dir, filename);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await writeFile(filepath, buffer);
+    const publicPath = `/uploads/logos/${filename}`;
+    return NextResponse.json({ path: publicPath });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao salvar arquivo";
+    console.error("[upload/logo]", msg);
+    return NextResponse.json(
+      { error: `Falha ao salvar logo: ${msg}. Verifique permissões da pasta public/uploads.` },
+      { status: 500 }
+    );
+  }
 }

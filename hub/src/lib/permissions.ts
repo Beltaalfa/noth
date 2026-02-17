@@ -167,13 +167,21 @@ export async function canUserAccessAlteracaoDespesaForClient(
   return tools.some((t) => t.clientId === clientId);
 }
 
-/** Acesso direto à Alteração de Despesa - admin sempre; ou usuário com acesso ao cliente PMG */
+/** Acesso direto à Alteração de Despesa - admin; ou ToolPermission; ou ClientTool; ou cliente PMG */
 export async function canUserAccessAlteracaoDespesaPmg(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { role: true },
   });
   if (user?.role === "admin") return true;
+
+  // Permissão via ToolPermission (Admin → Permissões)
+  const alteracaoTools = await getAlteracaoDespesaToolsForUser(userId);
+  if (alteracaoTools.length > 0) return true;
+
+  // Ferramenta visível em Ferramentas (ClientTool)
+  const allTools = await getToolsForUser(userId);
+  if (allTools.some((t) => t.slug === "alteracao-despesa")) return true;
 
   const clientIds = await getClientIdsForUser(userId);
   if (clientIds.size === 0) return false;

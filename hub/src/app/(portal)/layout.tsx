@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { IconLayoutDashboard, IconTools, IconUser, IconReport } from "@tabler/icons-react";
-import { getToolsForUser, getReportsForUser, canUserAccessAlteracaoDespesaPmg } from "@/lib/permissions";
+import { IconLayoutDashboard, IconTools, IconUser, IconReport, IconMessageCircle } from "@tabler/icons-react";
+import { getToolsForUser, getReportsForUser, canUserAccessAlteracaoDespesaPmg, getClientsForUser } from "@/lib/permissions";
 import { LayoutWithSidebar } from "@/components/layout/LayoutWithSidebar";
 
 export default async function PortalLayout({
@@ -18,10 +18,11 @@ export default async function PortalLayout({
   const userId = (session.user as { id?: string })?.id;
   if (!userId) redirect("/login");
 
-  const [tools, reports, alteracaoDespesaAcesso] = await Promise.all([
+  const [tools, reports, alteracaoDespesaAcesso, clients] = await Promise.all([
     getToolsForUser(userId),
     getReportsForUser(userId),
     canUserAccessAlteracaoDespesaPmg(userId),
+    getClientsForUser(userId),
   ]);
 
   const sidebarItems = [
@@ -30,6 +31,7 @@ export default async function PortalLayout({
     ...(alteracaoDespesaAcesso
       ? [{ href: "/ferramentas/alteracao-despesa", label: "Ajuste de Despesas", icon: <IconTools /> }]
       : []),
+    ...(clients.length > 0 ? [{ href: "/helpdesk", label: "Helpdesk", icon: <IconMessageCircle /> }] : []),
     ...tools.map((t) => ({
       href: `/ferramentas/${t.slug}`,
       label: t.name,

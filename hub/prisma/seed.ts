@@ -12,12 +12,12 @@ async function main() {
   const adminHash = await bcrypt.hash("admin123", 12);
   const gabrielHash = await bcrypt.hash("8421", 12);
 
-  const admin = await prisma.user.upsert({
+  const adm = await prisma.user.upsert({
     where: { email: "admin@northempresarial.com" },
-    update: {},
+    update: { name: "ADM", role: "admin", status: "active" },
     create: {
       email: "admin@northempresarial.com",
-      name: "Administrador",
+      name: "ADM",
       passwordHash: adminHash,
       role: "admin",
       status: "active",
@@ -26,17 +26,17 @@ async function main() {
 
   const gabriel = await prisma.user.upsert({
     where: { email: "gabriel.oliveira@lgzsolucoes.com.br" },
-    update: {},
+    update: { name: "Gabriel", role: "admin", status: "active" },
     create: {
       email: "gabriel.oliveira@lgzsolucoes.com.br",
-      name: "Gabriel Oliveira",
+      name: "Gabriel",
       passwordHash: gabrielHash,
       role: "admin",
       status: "active",
     },
   });
 
-  console.log("Seed concluído. Admin:", admin.email, "| Gabriel:", gabriel.email);
+  console.log("Seed concluído. ADM:", adm.email, "| Gabriel:", gabriel.email);
 }
 
 main()

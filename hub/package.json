@@ -3,14 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev",
+    "dev:3010": "next dev -p 3010",
     "build": "next build",
     "start": "next start -p 3007",
     "lint": "eslint",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
-    "db:seed": "npx tsx prisma/seed.ts"
+    "db:seed": "npx tsx prisma/seed.ts",
+    "migrate-helpdesk": "npx tsx scripts/migrate-helpdesk-to-tenants.ts",
+    "verificar-tenant": "npx tsx scripts/verificar-tenant-helpdesk.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

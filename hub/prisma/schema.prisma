@@ -54,6 +54,12 @@ model User {
   userSectorPermissions UserSectorPermission[]
   userToolPermissions   UserToolPermission[]
   auditLogs             AuditLog[]
+  helpdeskTicketsCreated HelpdeskTicket[]     @relation("TicketCreator")
+  helpdeskTicketsAssigned HelpdeskTicket[]    @relation("TicketAssigneeUser")
+  helpdeskMessages      HelpdeskMessage[]
+  helpdeskNotifications HelpdeskNotification[]
+  approvalConfigApprovers HelpdeskApprovalConfigApprover[]
+  approvalLogs          HelpdeskApprovalLog[]
 
   @@index([deletedAt])
 }
@@ -72,8 +78,27 @@ model Client {
   tools          Tool[]
   userPermissions UserClientPermission[]
   clientTools     ClientTool[]
+  helpdeskTickets HelpdeskTicket[]
+  helpdeskApprovalConfigs HelpdeskApprovalConfig[]
+  helpdeskTenant HelpdeskTenant?
 
   @@index([deletedAt])
+}
+
+model HelpdeskTenant {
+  id         String   @id @default(cuid())
+  clientId   String   @unique
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  dbName     String
+  dbHost     String
+  dbPort     Int
+  dbUser     String
+  dbPassword String
+  dbSsl      Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([clientId])
 }
 
 model Group {
@@ -86,6 +111,8 @@ model Group {
 
   sectors   Sector[]
   userPermissions UserGroupPermission[]
+  helpdeskTickets HelpdeskTicket[] @relation("TicketAssigneeGroup")
+  helpdeskApprovalConfigs HelpdeskApprovalConfig[]
 
   @@index([clientId])
 }
@@ -99,6 +126,8 @@ model Sector {
   updatedAt DateTime @updatedAt
 
   userPermissions UserSectorPermission[]
+  helpdeskTickets HelpdeskTicket[] @relation("TicketAssigneeSector")
+  helpdeskApprovalConfigs HelpdeskApprovalConfig[]
 
   @@index([groupId])
 }
@@ -229,6 +258,163 @@ model ClientTool {
   @@unique([clientId, toolId])
   @@index([clientId])
   @@index([toolId])
+}
+
+// Helpdesk
+enum HelpdeskTicketStatus {
+  open
+  in_progress
+  closed
+  pending_approval
+  in_approval
+  rejected
+  approved
+  cancelled
+}
+
+enum HelpdeskApprovalType {
+  hierarchical
+  by_level
+}
+
+enum HelpdeskApprovalAction {
+  approved
+  rejected
+}
+
+enum HelpdeskAssigneeType {
+  user
+  group
+  sector
+}
+
+model HelpdeskTicket {
+  id              String              @id @default(cuid())
+  clientId        String
+  client          Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  subject         String?
+  status          HelpdeskTicketStatus @default(open)
+  assigneeType    HelpdeskAssigneeType
+  assigneeUserId  String?
+  assigneeUser    User?               @relation("TicketAssigneeUser", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  assigneeGroupId String?
+  assigneeSectorId String?
+  group           Group?              @relation("TicketAssigneeGroup", fields: [assigneeGroupId], references: [id], onDelete: SetNull)
+  sector          Sector?             @relation("TicketAssigneeSector", fields: [assigneeSectorId], references: [id], onDelete: SetNull)
+  createdById     String
+  creator         User                @relation("TicketCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  slaLimitHours   Int?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  messages HelpdeskMessage[]
+  notifications HelpdeskNotification[]
+  approvalLogs   HelpdeskApprovalLog[]
+
+  @@index([clientId])
+  @@index([createdById])
+  @@index([assigneeUserId])
+  @@index([assigneeGroupId])
+  @@index([assigneeSectorId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model HelpdeskMessage {
+  id                    String    @id @default(cuid())
+  ticketId              String
+  ticket                HelpdeskTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content               String    @db.Text
+  forwardedFromMessageId String?
+  createdAt             DateTime  @default(now())
+
+  attachments HelpdeskAttachment[]
+  notifications HelpdeskNotification[]
+
+  @@index([ticketId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model HelpdeskAttachment {
+  id        String   @id @default(cuid())
+  messageId String
+  message   HelpdeskMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  filename  String
+  mimeType  String
+  size      Int      // bytes
+  storagePath String // path relativo: helpdesk/{ticketId}/{messageId}/{filename}
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
+}
+
+model HelpdeskNotification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticketId  String
+  ticket    HelpdeskTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  messageId String?
+  message   HelpdeskMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  type      String    // new_ticket, new_message, awaiting_approval, approved, rejected, returned_for_revision
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([ticketId])
+  @@index([readAt])
+}
+
+model HelpdeskApprovalConfig {
+  id             String              @id @default(cuid())
+  clientId       String
+  client         Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  groupId        String?
+  group          Group?              @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sectorId       String?
+  sector         Sector?             @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  exigeAprovacao Boolean             @default(true)
+  tipoAprovacao  HelpdeskApprovalType @default(by_level)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  approvers HelpdeskApprovalConfigApprover[]
+
+  @@index([clientId])
+  @@index([groupId])
+  @@index([sectorId])
+}
+
+model HelpdeskApprovalConfigApprover {
+  id       String                @id @default(cuid())
+  configId String
+  config   HelpdeskApprovalConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ordem    Int?
+  nivel    Int?
+  createdAt DateTime             @default(now())
+
+  @@unique([configId, userId])
+  @@index([configId])
+  @@index([userId])
+}
+
+model HelpdeskApprovalLog {
+  id        String                @id @default(cuid())
+  ticketId  String
+  ticket    HelpdeskTicket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    HelpdeskApprovalAction
+  comment   String?               @db.Text
+  createdAt DateTime              @default(now())
+
+  @@index([ticketId])
+  @@index([userId])
 }
 
 model AuditLog {
