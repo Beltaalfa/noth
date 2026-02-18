@@ -2,15 +2,7 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getClientIdsForUser } from "@/lib/helpdesk";
-import { withHelpdeskDb } from "@/lib/helpdesk-db";
 import { logAudit } from "@/lib/audit";
-import { randomBytes } from "crypto";
-
-function cuidLike(): string {
-  const t = Date.now().toString(36);
-  const r = randomBytes(6).toString("hex");
-  return `c${t}${r}`.slice(0, 25);
-}
 
 async function checkCanAccessHelpdesk(userId: string, clientId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
@@ -33,22 +25,28 @@ export async function GET(request: Request) {
   const can = await checkCanAccessHelpdesk(userId, clientId);
   if (!can) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
-  try {
-    const rows = await withHelpdeskDb(clientId, async (pool) => {
-      const r = await pool.query(
-        `SELECT t.id, t.nome, t.parent_id, t.status, t.ordem, t.created_at, t.updated_at,
-                p.nome AS parent_nome
-         FROM hd_tipo_solicitacao t
-         LEFT JOIN hd_tipo_solicitacao p ON p.id = t.parent_id
-         ORDER BY t.ordem, t.nome`
-      );
-      return r.rows;
-    });
-    return NextResponse.json(rows);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Erro ao listar tipos";
-    return NextResponse.json({ error: msg }, { status: 500 });
-  }
+  const rows = await prisma.helpdeskTipoSolicitacao.findMany({
+    where: { clientId },
+    include: {
+      group: { select: { id: true, name: true } },
+      sector: { select: { id: true, name: true } },
+    },
+    orderBy: [{ nome: "asc" }],
+  });
+
+  const result = rows.map((t) => ({
+    id: t.id,
+    nome: t.nome,
+    group_id: t.groupId,
+    group_nome: t.group?.name ?? null,
+    sector_id: t.sectorId,
+    sector_nome: t.sector?.name ?? null,
+    status: t.status,
+    created_at: t.createdAt,
+    updated_at: t.updatedAt,
+  }));
+
+  return NextResponse.json(result);
 }
 
 /** POST /api/helpdesk/tipos — create tipo */
@@ -58,47 +56,44 @@ export async function POST(request: Request) {
   const userId = (session.user as { id?: string })?.id;
   if (!userId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
 
-  let body: { clientId: string; nome: string; parentId?: string | null; ordem?: number; status?: string };
+  let body: { clientId: string; nome: string; groupId?: string | null; sectorId?: string | null; status?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
-  const { clientId, nome, parentId, ordem = 0, status = "A" } = body;
+  const { clientId, nome, groupId, sectorId, status = "A" } = body;
   if (!clientId || !nome?.trim()) return NextResponse.json({ error: "clientId e nome obrigatórios" }, { status: 400 });
   if (status !== "A" && status !== "I") return NextResponse.json({ error: "status deve ser A ou I" }, { status: 400 });
 
   const can = await checkCanAccessHelpdesk(userId, clientId);
   if (!can) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
-  const id = cuidLike();
-  try {
-    await withHelpdeskDb(clientId, async (pool) => {
-      await pool.query(
-        `INSERT INTO hd_tipo_solicitacao (id, nome, parent_id, status, ordem, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, now(), now())`,
-        [id, nome.trim(), parentId || null, status, ordem ?? 0]
-      );
-    });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "Erro ao criar tipo";
-    return NextResponse.json({ error: msg }, { status: 500 });
-  }
+  const inserted = await prisma.helpdeskTipoSolicitacao.create({
+    data: {
+      clientId,
+      nome: nome.trim(),
+      groupId: groupId || null,
+      sectorId: sectorId || null,
+      status,
+    },
+  });
 
   await logAudit({
     userId,
     action: "create",
     entity: "HelpdeskTipoSolicitacao",
-    entityId: id,
+    entityId: inserted.id,
     details: JSON.stringify({ clientId, nome: nome.trim() }),
   });
 
-  const inserted = await withHelpdeskDb(clientId, async (pool) => {
-    const r = await pool.query(
-      `SELECT id, nome, parent_id, status, ordem, created_at, updated_at FROM hd_tipo_solicitacao WHERE id = $1`,
-      [id]
-    );
-    return r.rows[0];
+  return NextResponse.json({
+    id: inserted.id,
+    nome: inserted.nome,
+    group_id: inserted.groupId,
+    sector_id: inserted.sectorId,
+    status: inserted.status,
+    created_at: inserted.createdAt,
+    updated_at: inserted.updatedAt,
   });
-  return NextResponse.json(inserted);
 }

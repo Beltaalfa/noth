@@ -57,28 +57,43 @@ export async function canUserAccessTicket(userId: string, ticketId: string): Pro
         ...(ticket.assigneeSectorId ? [{ config: { sectorId: ticket.assigneeSectorId } }] : []),
       ],
     },
+    include: { config: { select: { sectorId: true, tipoSolicitacaoId: true } } },
   });
-  if (approver) return true;
+  if (approver) {
+    if (approver.config.sectorId && approver.config.tipoSolicitacaoId) {
+      const ticketWithTipo = await prisma.helpdeskTicket.findUnique({
+        where: { id: ticketId },
+        select: { tipoSolicitacaoId: true },
+      });
+      if (ticketWithTipo?.tipoSolicitacaoId !== approver.config.tipoSolicitacaoId) return false;
+    }
+    return true;
+  }
 
   return false;
 }
 
-/** Verifica se o usuário pode aprovar/reprovar o ticket */
+/** Verifica se o usuário pode aprovar/reprovar o ticket.
+ * Setor (Group): pode aprovar todos os tipos do setor.
+ * Grupo (Sector): pode aprovar apenas o tipo de solicitação configurado (tipoSolicitacaoId). */
 export async function canUserApproveTicket(userId: string, ticketId: string): Promise<boolean> {
   const ticket = await prisma.helpdeskTicket.findUnique({
     where: { id: ticketId },
-    select: { assigneeGroupId: true, assigneeSectorId: true, status: true },
+    select: { assigneeGroupId: true, assigneeSectorId: true, status: true, tipoSolicitacaoId: true },
   });
   if (!ticket || ticket.status !== "pending_approval") return false;
 
   const approver = await prisma.helpdeskApprovalConfigApprover.findFirst({
     where: { userId },
-    include: { config: { select: { groupId: true, sectorId: true } } },
+    include: { config: { select: { groupId: true, sectorId: true, tipoSolicitacaoId: true } } },
   });
   if (!approver) return false;
 
   if (approver.config.groupId && ticket.assigneeGroupId === approver.config.groupId) return true;
-  if (approver.config.sectorId && ticket.assigneeSectorId === approver.config.sectorId) return true;
+  if (approver.config.sectorId && ticket.assigneeSectorId === approver.config.sectorId) {
+    if (approver.config.tipoSolicitacaoId) return ticket.tipoSolicitacaoId === approver.config.tipoSolicitacaoId;
+    return true;
+  }
   return false;
 }
 

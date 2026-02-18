@@ -172,11 +172,11 @@ export default function ConexoesPage() {
       {loading ? <p className="text-zinc-500">Carregando...</p> : (
         <Table<Conexao>
           columns={[
+            { key: "client", header: "Cliente", render: (r) => r.client?.name ?? "-" },
             { key: "type", header: "Tipo", render: (r) => r.type === "postgres" ? "PostgreSQL" : "Firebird" },
             { key: "host", header: "Host" },
             { key: "port", header: "Porta" },
             { key: "database", header: "Database" },
-            { key: "client", header: "Cliente", render: (r) => r.client?.name ?? "-" },
             { key: "status", header: "Status", render: (r) => <span className={r.status === "active" ? "text-green-400" : "text-zinc-500"}>{r.status === "active" ? "Ativo" : "Inativo"}</span> },
             {
               key: "actions",

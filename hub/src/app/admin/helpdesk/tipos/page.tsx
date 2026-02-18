@@ -9,26 +9,32 @@ import { Modal } from "@/components/ui/Modal";
 type Tipo = {
   id: string;
   nome: string;
-  parent_id: string | null;
-  parent_nome: string | null;
+  group_id: string | null;
+  group_nome: string | null;
+  sector_id: string | null;
+  sector_nome: string | null;
   status: string;
-  ordem: number;
   created_at: string;
   updated_at: string;
 };
+
+type Group = { id: string; name: string };
+type Sector = { id: string; name: string; groupId: string };
 
 export default function TiposSolicitacaoPage() {
   const [clientes, setClientes] = useState<{ id: string; name: string }[]>([]);
   const [clientId, setClientId] = useState("");
   const [tipos, setTipos] = useState<Tipo[]>([]);
+  const [setores, setSetores] = useState<Group[]>([]);
+  const [grupos, setGrupos] = useState<Sector[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Tipo | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<{ nome: string; parentId: string; ordem: number; status: string }>({
+  const [form, setForm] = useState<{ nome: string; groupId: string; sectorId: string; status: string }>({
     nome: "",
-    parentId: "",
-    ordem: 0,
+    groupId: "",
+    sectorId: "",
     status: "A",
   });
 
@@ -50,6 +56,27 @@ export default function TiposSolicitacaoPage() {
     } else setTipos([]);
   }, [clientId]);
 
+  const fetchSetores = useCallback(async () => {
+    if (!clientId) return;
+    const res = await fetch(`/api/admin/grupos?clientId=${clientId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setSetores(Array.isArray(data) ? data : []);
+    } else setSetores([]);
+  }, [clientId]);
+
+  const fetchGrupos = useCallback(async (groupId: string) => {
+    if (!groupId) {
+      setGrupos([]);
+      return;
+    }
+    const res = await fetch(`/api/admin/setores?groupId=${groupId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setGrupos(Array.isArray(data) ? data : []);
+    } else setGrupos([]);
+  }, []);
+
   useEffect(() => {
     fetchClientes();
   }, [fetchClientes]);
@@ -61,26 +88,18 @@ export default function TiposSolicitacaoPage() {
   useEffect(() => {
     if (clientId) {
       setLoading(true);
-      fetchTipos().finally(() => setLoading(false));
+      Promise.all([fetchTipos(), fetchSetores()]).finally(() => setLoading(false));
     }
-  }, [clientId, fetchTipos]);
+  }, [clientId, fetchTipos, fetchSetores]);
 
-  function buildPath(id: string): string {
-    const map = new Map(tipos.map((t) => [t.id, t]));
-    const parts: string[] = [];
-    let current: string | null = id;
-    for (let i = 0; i < 50 && current; i++) {
-      const t = map.get(current);
-      if (!t) break;
-      parts.unshift(t.nome);
-      current = t.parent_id;
-    }
-    return parts.join(" > ") || "-";
-  }
+  useEffect(() => {
+    if (form.groupId) fetchGrupos(form.groupId);
+    else setGrupos([]);
+  }, [form.groupId, fetchGrupos]);
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ nome: "", parentId: "", ordem: 0, status: "A" });
+    setForm({ nome: "", groupId: "", sectorId: "", status: "A" });
     setModalOpen(true);
   };
 
@@ -88,8 +107,8 @@ export default function TiposSolicitacaoPage() {
     setEditing(t);
     setForm({
       nome: t.nome,
-      parentId: t.parent_id ?? "",
-      ordem: t.ordem ?? 0,
+      groupId: t.group_id ?? "",
+      sectorId: t.sector_id ?? "",
       status: t.status ?? "A",
     });
     setModalOpen(true);
@@ -107,17 +126,18 @@ export default function TiposSolicitacaoPage() {
     }
     setSaving(true);
     try {
+      const payload = {
+        clientId,
+        nome: form.nome.trim(),
+        groupId: form.groupId || null,
+        sectorId: form.sectorId || null,
+        status: form.status,
+      };
       if (editing) {
         const res = await fetch(`/api/helpdesk/tipos/${editing.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            clientId,
-            nome: form.nome.trim(),
-            parentId: form.parentId || null,
-            ordem: form.ordem,
-            status: form.status,
-          }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (res.ok) {
@@ -129,13 +149,7 @@ export default function TiposSolicitacaoPage() {
         const res = await fetch("/api/helpdesk/tipos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            clientId,
-            nome: form.nome.trim(),
-            parentId: form.parentId || null,
-            ordem: form.ordem,
-            status: form.status,
-          }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (res.ok) {
@@ -168,7 +182,7 @@ export default function TiposSolicitacaoPage() {
 
   const handleDelete = async (t: Tipo) => {
     if (!clientId) return;
-    if (!confirm(`Inativar "${t.nome}"? (Não remove se tiver subcategorias.)`)) return;
+    if (!confirm(`Inativar "${t.nome}"?`)) return;
     const res = await fetch(`/api/helpdesk/tipos/${t.id}?clientId=${clientId}`, { method: "DELETE" });
     if (res.ok) {
       toast.success("Tipo inativado");
@@ -178,10 +192,6 @@ export default function TiposSolicitacaoPage() {
       toast.error(data.error ?? "Erro");
     }
   };
-
-  const pathPreview = form.parentId
-    ? (buildPath(form.parentId) + (form.nome.trim() ? " > " + form.nome.trim() : "")) || "-"
-    : form.nome.trim() || "-";
 
   return (
     <div>
@@ -213,10 +223,9 @@ export default function TiposSolicitacaoPage() {
             <thead>
               <tr className="border-b border-zinc-700/50">
                 <th className="px-3 py-2 text-left font-medium text-zinc-400">Nome</th>
-                <th className="px-3 py-2 text-left font-medium text-zinc-400">Pai</th>
-                <th className="px-3 py-2 text-left font-medium text-zinc-400">Ordem</th>
+                <th className="px-3 py-2 text-left font-medium text-zinc-400">Setor</th>
+                <th className="px-3 py-2 text-left font-medium text-zinc-400">Grupo</th>
                 <th className="px-3 py-2 text-left font-medium text-zinc-400">Status</th>
-                <th className="px-3 py-2 text-left font-medium text-zinc-400">Caminho</th>
                 <th className="px-3 py-2 text-left font-medium text-zinc-400">Ações</th>
               </tr>
             </thead>
@@ -224,10 +233,9 @@ export default function TiposSolicitacaoPage() {
               {tipos.map((t) => (
                 <tr key={t.id} className="border-b border-zinc-700/30">
                   <td className="px-3 py-2.5 text-zinc-200">{t.nome}</td>
-                  <td className="px-3 py-2.5 text-zinc-400">{t.parent_nome ?? "-"}</td>
-                  <td className="px-3 py-2.5 text-zinc-400">{t.ordem}</td>
+                  <td className="px-3 py-2.5 text-zinc-400">{t.group_nome ?? "-"}</td>
+                  <td className="px-3 py-2.5 text-zinc-400">{t.sector_nome ?? "-"}</td>
                   <td className="px-3 py-2.5">{t.status === "A" ? <span className="text-emerald-400">Ativo</span> : <span className="text-zinc-500">Inativo</span>}</td>
-                  <td className="px-3 py-2.5 text-zinc-500 text-xs max-w-[200px] truncate" title={buildPath(t.id)}>{buildPath(t.id)}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex gap-2">
                       <button onClick={() => openEdit(t)} className="p-2 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-zinc-800" title="Editar"><IconPencil size={18} strokeWidth={2} /></button>
@@ -256,27 +264,31 @@ export default function TiposSolicitacaoPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">Pai</label>
+            <label className="block text-sm font-medium text-zinc-400 mb-1">Setor</label>
             <select
-              value={form.parentId}
-              onChange={(e) => setForm((f) => ({ ...f, parentId: e.target.value }))}
+              value={form.groupId}
+              onChange={(e) => setForm((f) => ({ ...f, groupId: e.target.value, sectorId: "" }))}
               className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
             >
-              <option value="">Nenhum (raiz)</option>
-              {tipos.filter((t) => !editing || t.id !== editing.id).map((t) => (
-                <option key={t.id} value={t.id}>{t.nome}</option>
+              <option value="">Nenhum</option>
+              {setores.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-zinc-400 mb-1">Ordem</label>
-            <input
-              type="number"
-              min={0}
-              value={form.ordem}
-              onChange={(e) => setForm((f) => ({ ...f, ordem: Number(e.target.value) || 0 }))}
+            <label className="block text-sm font-medium text-zinc-400 mb-1">Grupo</label>
+            <select
+              value={form.sectorId}
+              onChange={(e) => setForm((f) => ({ ...f, sectorId: e.target.value }))}
               className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
-            />
+              disabled={!form.groupId}
+            >
+              <option value="">Nenhum</option>
+              {grupos.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-zinc-400 mb-1">Status</label>
@@ -288,10 +300,6 @@ export default function TiposSolicitacaoPage() {
               <option value="A">Ativo</option>
               <option value="I">Inativo</option>
             </select>
-          </div>
-          <div className="rounded-lg bg-zinc-800/50 px-3 py-2">
-            <span className="text-xs text-zinc-500">Caminho: </span>
-            <span className="text-sm text-zinc-300">{pathPreview}</span>
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-zinc-700/50">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>

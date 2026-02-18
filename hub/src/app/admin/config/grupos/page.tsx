@@ -60,14 +60,14 @@ export default function GruposPage() {
       const url = editing ? `/api/admin/grupos/${editing.id}` : "/api/admin/grupos";
       const method = editing ? "PATCH" : "POST";
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
-      if (res.ok) { toast.success(editing ? "Grupo atualizado!" : "Grupo criado!"); setModalOpen(false); fetchData(); } else toast.error((await res.json()).error || "Erro");
+      if (res.ok) { toast.success(editing ? "Setor atualizado!" : "Setor criado!"); setModalOpen(false); fetchData(); } else toast.error((await res.json()).error || "Erro");
     } finally { setSaving(false); }
   };
 
   const handleDelete = async (row: Group) => {
-    if (!confirm(`Excluir grupo "${row.name}"?`)) return;
+    if (!confirm(`Excluir setor "${row.name}"?`)) return;
     const res = await fetch(`/api/admin/grupos/${row.id}`, { method: "DELETE" });
-    if (res.ok) { toast.success("Grupo excluído"); fetchData(); } else toast.error("Erro ao excluir");
+    if (res.ok) { toast.success("Setor excluído"); fetchData(); } else toast.error("Erro ao excluir");
   };
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -75,16 +75,16 @@ export default function GruposPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-zinc-100">Grupos</h1>
+        <h1 className="text-2xl font-bold text-zinc-100">Setores</h1>
         <Button onClick={openCreate} className="gap-2" disabled={clientes.length === 0}>
-          <IconPlus size={18} strokeWidth={2} /> Novo grupo
+          <IconPlus size={18} strokeWidth={2} /> Novo setor
         </Button>
       </div>
       {loading ? <p className="text-zinc-500">Carregando...</p> : (
         <Table<Group>
           columns={[
-            { key: "name", header: "Nome" },
             { key: "client", header: "Cliente", render: (r) => r.client?.name ?? "-" },
+            { key: "name", header: "Nome" },
             { key: "actions", header: "Ações", render: (r) => (
               <div className="flex gap-2">
                 <button onClick={(e) => { e.stopPropagation(); openEdit(r); }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-zinc-800" title="Editar"><IconPencil size={18} strokeWidth={2} /></button>
@@ -94,7 +94,7 @@ export default function GruposPage() {
           ]}
           data={data}
           keyExtractor={(r) => r.id}
-          emptyMessage="Nenhum grupo. Cadastre clientes primeiro."
+          emptyMessage="Nenhum setor. Cadastre clientes primeiro."
         />
       )}
       {total > 0 && (
@@ -107,7 +107,7 @@ export default function GruposPage() {
           onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
         />
       )}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Editar grupo" : "Novo grupo"}>
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Editar setor" : "Novo setor"}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <Input label="Nome" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
           <div>

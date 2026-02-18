@@ -108,7 +108,7 @@ function ToolPermissoesModal({ tool, onClose, onUpdate }: { tool: Tool; onClose:
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-medium text-zinc-300 mb-2">Grupos</h3>
+            <h3 className="text-sm font-medium text-zinc-300 mb-2">Setores</h3>
             <div className="flex gap-2 mb-2">
               <select value={selGroup} onChange={(e) => setSelGroup(e.target.value)} className="flex-1 px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-700 text-zinc-100 text-sm">
                 <option value="">Selecione</option>
@@ -128,7 +128,7 @@ function ToolPermissoesModal({ tool, onClose, onUpdate }: { tool: Tool; onClose:
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-medium text-zinc-300 mb-2">Setores</h3>
+            <h3 className="text-sm font-medium text-zinc-300 mb-2">Grupos</h3>
             <div className="flex gap-2 mb-2">
               <select value={selSector} onChange={(e) => setSelSector(e.target.value)} className="flex-1 px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-700 text-zinc-100 text-sm">
                 <option value="">Selecione</option>

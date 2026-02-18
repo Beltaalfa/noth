@@ -71,7 +71,7 @@ export default function ClientesPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      let logoPath = editing?.logoUrl ?? null;
+      let logoPath: string | null = editing?.logoUrl ?? null;
       if (logoFile) {
         const formData = new FormData();
         formData.append("file", logoFile);
@@ -79,20 +79,26 @@ export default function ClientesPage() {
           method: "POST",
           body: formData,
         });
+        const upJson = await upRes.json().catch(() => ({}));
         if (!upRes.ok) {
-          const err = await upRes.json();
-          toast.error(err.error || "Erro ao fazer upload da logo");
+          toast.error(upJson?.error || "Erro ao fazer upload da logo");
           return;
         }
-        const { path } = await upRes.json();
-        logoPath = path;
+        const path = upJson?.path;
+        if (path && typeof path === "string") {
+          logoPath = path;
+        } else {
+          toast.error("Resposta do upload inválida. Tente novamente.");
+          return;
+        }
       }
       const url = editing ? `/api/admin/clientes/${editing.id}` : "/api/admin/clientes";
       const method = editing ? "PATCH" : "POST";
+      const body = { name: form.name, status: form.status, logoUrl: logoPath };
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, logoUrl: logoPath }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         toast.success(editing ? "Cliente atualizado!" : "Cliente criado!");
@@ -102,6 +108,8 @@ export default function ClientesPage() {
         const err = await res.json();
         toast.error(err.error || "Erro ao salvar");
       }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao salvar cliente");
     } finally {
       setSaving(false);
     }

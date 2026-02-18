@@ -18,8 +18,13 @@ export default function RelatoriosPage() {
 
   useEffect(() => {
     fetch("/api/hub/relatorios")
-      .then((r) => (r.ok ? r.json() : []))
+      .then(async (r) => {
+        if (!r.ok) return [];
+        const data = await r.json();
+        return Array.isArray(data) ? data : [];
+      })
       .then(setReports)
+      .catch(() => setReports([]))
       .finally(() => setLoading(false));
   }, []);
 

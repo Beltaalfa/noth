@@ -10,6 +10,11 @@ export async function GET() {
   const userId = (session.user as { id?: string })?.id;
   if (!userId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
 
-  const reports = await getReportsForUser(userId);
-  return NextResponse.json(reports);
+  try {
+    const reports = await getReportsForUser(userId);
+    return NextResponse.json(reports);
+  } catch (e) {
+    console.error("[api/hub/relatorios]", e);
+    return NextResponse.json([], { status: 200 });
+  }
 }

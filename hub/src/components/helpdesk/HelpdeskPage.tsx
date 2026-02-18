@@ -87,6 +87,8 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
   const [showResubmit, setShowResubmit] = useState(false);
   const [resubmitSubject, setResubmitSubject] = useState("");
   const [resubmitContent, setResubmitContent] = useState("");
+  const [tiposSolicitacao, setTiposSolicitacao] = useState<{ id: string; nome: string; parent_nome: string | null }[]>([]);
+  const [tipoSolicitacaoId, setTipoSolicitacaoId] = useState<string>("");
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);
@@ -169,6 +171,17 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
     if (showNew && clientId) fetchDestinatarios();
   }, [showNew, clientId, fetchDestinatarios]);
 
+  const fetchTiposSolicitacao = useCallback(async () => {
+    if (!clientId) return;
+    const res = await fetch(`/api/helpdesk/tipos?clientId=${clientId}`);
+    const data = await res.json();
+    if (res.ok) setTiposSolicitacao(Array.isArray(data) ? data.filter((t: { status?: string }) => t.status === "A") : []);
+    else setTiposSolicitacao([]);
+  }, [clientId]);
+
+  useEffect(() => {
+    if (showNew && clientId) fetchTiposSolicitacao();
+  }, [showNew, clientId, fetchTiposSolicitacao]);
 
   const handleCreate = async () => {
     if (!clientId || !assigneeId || !content.trim()) {
@@ -186,6 +199,7 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
           assigneeType,
           assigneeId,
           content: content.trim(),
+          tipoSolicitacaoId: tipoSolicitacaoId || undefined,
         }),
       });
       const data = await res.json();
@@ -195,6 +209,7 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
         setSubject("");
         setContent("");
         setAssigneeId("");
+        setTipoSolicitacaoId("");
         fetchTickets();
         fetchSummary();
       } else {
@@ -425,6 +440,23 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
               </select>
             </div>
           </div>
+          {tiposSolicitacao.length > 0 && (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-zinc-400">Tipo de Solicitação</label>
+              <select
+                value={tipoSolicitacaoId}
+                onChange={(e) => setTipoSolicitacaoId(e.target.value)}
+                className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+              >
+                <option value="">Nenhum</option>
+                {tiposSolicitacao.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.parent_nome ? `${t.parent_nome} › ${t.nome}` : t.nome}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-zinc-400">Assunto</label>
             <input

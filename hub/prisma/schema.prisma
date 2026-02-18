@@ -81,8 +81,36 @@ model Client {
   helpdeskTickets HelpdeskTicket[]
   helpdeskApprovalConfigs HelpdeskApprovalConfig[]
   helpdeskTenant HelpdeskTenant?
+  helpdeskTipoSolicitacoes HelpdeskTipoSolicitacao[]
 
   @@index([deletedAt])
+}
+
+model HelpdeskTipoSolicitacao {
+  id        String   @id @default(cuid())
+  nome      String
+  parentId  String?
+  parent    HelpdeskTipoSolicitacao?  @relation("TipoParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children  HelpdeskTipoSolicitacao[] @relation("TipoParent")
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  groupId   String?  // Setor
+  group     Group?   @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  sectorId  String?  // Grupo
+  sector    Sector?  @relation(fields: [sectorId], references: [id], onDelete: SetNull)
+  status    String   @default("A") // A=Ativo, I=Inativo
+  ordem     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets HelpdeskTicket[]
+  helpdeskApprovalConfigs HelpdeskApprovalConfig[]
+
+  @@index([clientId])
+  @@index([parentId])
+  @@index([status])
+  @@index([groupId])
+  @@index([sectorId])
 }
 
 model HelpdeskTenant {
@@ -113,6 +141,7 @@ model Group {
   userPermissions UserGroupPermission[]
   helpdeskTickets HelpdeskTicket[] @relation("TicketAssigneeGroup")
   helpdeskApprovalConfigs HelpdeskApprovalConfig[]
+  helpdeskTipoSolicitacoes HelpdeskTipoSolicitacao[]
 
   @@index([clientId])
 }
@@ -128,6 +157,7 @@ model Sector {
   userPermissions UserSectorPermission[]
   helpdeskTickets HelpdeskTicket[] @relation("TicketAssigneeSector")
   helpdeskApprovalConfigs HelpdeskApprovalConfig[]
+  helpdeskTipoSolicitacoes HelpdeskTipoSolicitacao[]
 
   @@index([groupId])
 }
@@ -292,6 +322,8 @@ model HelpdeskTicket {
   id              String              @id @default(cuid())
   clientId        String
   client          Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  tipoSolicitacaoId String?
+  tipoSolicitacao HelpdeskTipoSolicitacao? @relation(fields: [tipoSolicitacaoId], references: [id], onDelete: SetNull)
   subject         String?
   status          HelpdeskTicketStatus @default(open)
   assigneeType    HelpdeskAssigneeType
@@ -312,6 +344,7 @@ model HelpdeskTicket {
   approvalLogs   HelpdeskApprovalLog[]
 
   @@index([clientId])
+  @@index([tipoSolicitacaoId])
   @@index([createdById])
   @@index([assigneeUserId])
   @@index([assigneeGroupId])
@@ -369,23 +402,26 @@ model HelpdeskNotification {
 }
 
 model HelpdeskApprovalConfig {
-  id             String              @id @default(cuid())
-  clientId       String
-  client         Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  groupId        String?
-  group          Group?              @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  sectorId       String?
-  sector         Sector?             @relation(fields: [sectorId], references: [id], onDelete: Cascade)
-  exigeAprovacao Boolean             @default(true)
-  tipoAprovacao  HelpdeskApprovalType @default(by_level)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id                 String                   @id @default(cuid())
+  clientId           String
+  client             Client                   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  groupId            String?
+  group              Group?                    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sectorId           String?
+  sector             Sector?                   @relation(fields: [sectorId], references: [id], onDelete: Cascade)
+  tipoSolicitacaoId  String?                  // Quando sectorId (Grupo): aprovar só este tipo. Quando groupId (Setor): null = todos os tipos
+  tipoSolicitacao    HelpdeskTipoSolicitacao?  @relation(fields: [tipoSolicitacaoId], references: [id], onDelete: SetNull)
+  exigeAprovacao     Boolean                  @default(true)
+  tipoAprovacao      HelpdeskApprovalType      @default(by_level)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
 
   approvers HelpdeskApprovalConfigApprover[]
 
   @@index([clientId])
   @@index([groupId])
   @@index([sectorId])
+  @@index([tipoSolicitacaoId])
 }
 
 model HelpdeskApprovalConfigApprover {

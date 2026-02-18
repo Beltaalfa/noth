@@ -127,7 +127,7 @@ function ToolPermissoesModal({
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-medium text-zinc-300 mb-2">Grupos</h3>
+            <h3 className="text-sm font-medium text-zinc-300 mb-2">Setores</h3>
             <div className="flex gap-2 mb-2">
               <select
                 value={selGroup}
@@ -151,7 +151,7 @@ function ToolPermissoesModal({
             </ul>
           </div>
           <div>
-            <h3 className="text-sm font-medium text-zinc-300 mb-2">Setores</h3>
+            <h3 className="text-sm font-medium text-zinc-300 mb-2">Grupos</h3>
             <div className="flex gap-2 mb-2">
               <select
                 value={selSector}

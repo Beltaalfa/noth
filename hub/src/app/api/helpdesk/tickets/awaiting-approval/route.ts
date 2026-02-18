@@ -12,10 +12,13 @@ export async function GET(request: Request) {
 
   const configsWhereUserIdIsApprover = await prisma.helpdeskApprovalConfigApprover.findMany({
     where: { userId },
-    select: { config: { select: { groupId: true, sectorId: true } } },
+    select: { config: { select: { groupId: true, sectorId: true, tipoSolicitacaoId: true } } },
   });
   const groupIds = configsWhereUserIdIsApprover.filter((c) => c.config.groupId).map((c) => c.config.groupId as string);
-  const sectorIds = configsWhereUserIdIsApprover.filter((c) => c.config.sectorId).map((c) => c.config.sectorId as string);
+  const sectorConfigs = configsWhereUserIdIsApprover
+    .filter((c) => c.config.sectorId)
+    .map((c) => ({ sectorId: c.config.sectorId as string, tipoSolicitacaoId: c.config.tipoSolicitacaoId }));
+  const sectorIds = sectorConfigs.length ? [...new Set(sectorConfigs.map((s) => s.sectorId))] : [];
   const orConditions = [
     ...(groupIds.length ? [{ assigneeType: "group" as const, assigneeGroupId: { in: groupIds } }] : []),
     ...(sectorIds.length ? [{ assigneeType: "sector" as const, assigneeSectorId: { in: sectorIds } }] : []),
@@ -30,10 +33,21 @@ export async function GET(request: Request) {
       client: { select: { id: true, name: true } },
       group: { select: { id: true, name: true } },
       sector: { select: { id: true, name: true } },
+      tipoSolicitacao: { select: { id: true, nome: true } },
       _count: { select: { messages: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 100,
   });
-  return NextResponse.json(tickets);
+  const filtered = tickets.filter((t) => {
+    if (t.assigneeGroupId && groupIds.includes(t.assigneeGroupId)) return true;
+    if (t.assigneeSectorId) {
+      const cfg = sectorConfigs.find((c) => c.sectorId === t.assigneeSectorId);
+      if (!cfg) return false;
+      if (cfg.tipoSolicitacaoId) return t.tipoSolicitacaoId === cfg.tipoSolicitacaoId;
+      return true;
+    }
+    return false;
+  });
+  return NextResponse.json(filtered);
 }

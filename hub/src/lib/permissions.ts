@@ -70,7 +70,7 @@ export async function getReportsForUser(userId: string): Promise<ReportForUser[]
   const reports: ReportForUser[] = [];
   for (const tp of toolPerms) {
     const t = tp.tool;
-    if (t && !seen.has(t.id)) {
+    if (t && t.client && !seen.has(t.id)) {
       seen.add(t.id);
       reports.push({
         id: t.id,

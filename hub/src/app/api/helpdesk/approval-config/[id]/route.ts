@@ -8,7 +8,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const role = (session.user as { role?: string })?.role;
   if (role !== "admin") return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   const { id } = await context.params;
-  let body: { exigeAprovacao?: boolean; tipoAprovacao?: "hierarchical" | "by_level"; approvers?: { userId: string; ordem?: number; nivel?: number }[] };
+  let body: { exigeAprovacao?: boolean; tipoAprovacao?: "hierarchical" | "by_level"; tipoSolicitacaoId?: string | null; approvers?: { userId: string; ordem?: number; nivel?: number }[] };
   try {
     body = await request.json();
   } catch {
@@ -16,9 +16,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
   const config = await prisma.helpdeskApprovalConfig.findUnique({ where: { id } });
   if (!config) return NextResponse.json({ error: "Configuração não encontrada" }, { status: 404 });
-  const updateData: { exigeAprovacao?: boolean; tipoAprovacao?: "hierarchical" | "by_level" } = {};
+  const updateData: { exigeAprovacao?: boolean; tipoAprovacao?: "hierarchical" | "by_level"; tipoSolicitacaoId?: string | null } = {};
   if (typeof body.exigeAprovacao === "boolean") updateData.exigeAprovacao = body.exigeAprovacao;
   if (body.tipoAprovacao && ["hierarchical", "by_level"].includes(body.tipoAprovacao)) updateData.tipoAprovacao = body.tipoAprovacao;
+  if (body.tipoSolicitacaoId !== undefined) updateData.tipoSolicitacaoId = body.tipoSolicitacaoId || null;
   if (body.approvers !== undefined) {
     await prisma.helpdeskApprovalConfigApprover.deleteMany({ where: { configId: id } });
     if (Array.isArray(body.approvers) && body.approvers.length > 0) {
@@ -30,7 +31,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const updated = await prisma.helpdeskApprovalConfig.update({
     where: { id },
     data: updateData,
-    include: { group: { select: { id: true, name: true } }, sector: { select: { id: true, name: true } }, approvers: { include: { user: { select: { id: true, name: true } } } } },
+    include: {
+      group: { select: { id: true, name: true } },
+      sector: { select: { id: true, name: true } },
+      tipoSolicitacao: { select: { id: true, nome: true } },
+      approvers: { include: { user: { select: { id: true, name: true } } } },
+    },
   });
   return NextResponse.json(updated);
 }

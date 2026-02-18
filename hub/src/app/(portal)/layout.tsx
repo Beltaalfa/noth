@@ -20,7 +20,7 @@ export default async function PortalLayout({
 
   const [tools, reports, alteracaoDespesaAcesso, clients] = await Promise.all([
     getToolsForUser(userId),
-    getReportsForUser(userId),
+    getReportsForUser(userId).catch(() => []),
     canUserAccessAlteracaoDespesaPmg(userId),
     getClientsForUser(userId),
   ]);

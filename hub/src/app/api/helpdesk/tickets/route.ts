@@ -65,14 +65,14 @@ export async function POST(request: Request) {
   const userId = (session.user as { id?: string })?.id;
   if (!userId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
 
-  let body: { clientId: string; subject?: string; assigneeType: "user" | "group" | "sector"; assigneeId: string; content: string };
+  let body: { clientId: string; subject?: string; assigneeType: "user" | "group" | "sector"; assigneeId: string; content: string; tipoSolicitacaoId?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  const { clientId, subject, assigneeType, assigneeId, content } = body;
+  const { clientId, subject, assigneeType, assigneeId, content, tipoSolicitacaoId } = body;
   if (!clientId || !assigneeType || !assigneeId || !content?.trim()) {
     return NextResponse.json({ error: "clientId, assigneeType, assigneeId e content são obrigatórios" }, { status: 400 });
   }
@@ -106,6 +106,7 @@ export async function POST(request: Request) {
     data: {
       clientId,
       subject: subject?.trim() || null,
+      tipoSolicitacaoId: tipoSolicitacaoId || null,
       status: initialStatus,
       assigneeType,
       assigneeUserId: assigneeType === "user" ? assigneeId : null,

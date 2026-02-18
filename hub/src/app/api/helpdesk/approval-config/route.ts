@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     include: {
       group: { select: { id: true, name: true } },
       sector: { select: { id: true, name: true } },
+      tipoSolicitacao: { select: { id: true, nome: true } },
       approvers: { include: { user: { select: { id: true, name: true } } } },
     },
     orderBy: { createdAt: "asc" },
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     clientId: string;
     groupId?: string;
     sectorId?: string;
+    tipoSolicitacaoId?: string | null;
     exigeAprovacao: boolean;
     tipoAprovacao: "hierarchical" | "by_level";
     approvers?: { userId: string; ordem?: number; nivel?: number }[];
@@ -44,24 +46,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  const { clientId, groupId, sectorId, exigeAprovacao, tipoAprovacao, approvers = [] } = body;
+  const { clientId, groupId, sectorId, tipoSolicitacaoId, exigeAprovacao, tipoAprovacao, approvers = [] } = body;
   if (!clientId || typeof exigeAprovacao !== "boolean") {
     return NextResponse.json({ error: "clientId e exigeAprovacao obrigatórios" }, { status: 400 });
   }
   const hasGroup = !!groupId;
   const hasSector = !!sectorId;
   if (hasGroup === hasSector) {
-    return NextResponse.json({ error: "Informe groupId OU sectorId, não ambos" }, { status: 400 });
+    return NextResponse.json({ error: "Informe groupId (Setor) OU sectorId (Grupo), não ambos" }, { status: 400 });
+  }
+  if (hasSector && !tipoSolicitacaoId) {
+    return NextResponse.json({ error: "Para aprovação por Setor (destino), informe o tipo de solicitação (um único tipo)" }, { status: 400 });
+  }
+  if (hasGroup && tipoSolicitacaoId) {
+    return NextResponse.json({ error: "Aprovação por Grupo (destino) vale para todos os tipos; não informe tipo de solicitação" }, { status: 400 });
   }
   if (!["hierarchical", "by_level"].includes(tipoAprovacao ?? "")) {
     return NextResponse.json({ error: "tipoAprovacao deve ser hierarchical ou by_level" }, { status: 400 });
   }
 
   const existing = await prisma.helpdeskApprovalConfig.findFirst({
-    where: { clientId, ...(groupId ? { groupId } : { sectorId }) },
+    where: {
+      clientId,
+      ...(groupId ? { groupId } : { sectorId: sectorId!, tipoSolicitacaoId: tipoSolicitacaoId || null }),
+    },
   });
   if (existing) {
-    return NextResponse.json({ error: "Já existe configuração para este grupo/setor" }, { status: 409 });
+    return NextResponse.json({ error: "Já existe configuração para este Setor/Grupo e tipo" }, { status: 409 });
   }
 
   const config = await prisma.helpdeskApprovalConfig.create({
@@ -69,6 +80,7 @@ export async function POST(request: Request) {
       clientId,
       groupId: groupId || null,
       sectorId: sectorId || null,
+      tipoSolicitacaoId: hasSector ? tipoSolicitacaoId || null : null,
       exigeAprovacao,
       tipoAprovacao: tipoAprovacao as "hierarchical" | "by_level",
       approvers: {
@@ -82,6 +94,7 @@ export async function POST(request: Request) {
     include: {
       group: { select: { id: true, name: true } },
       sector: { select: { id: true, name: true } },
+      tipoSolicitacao: { select: { id: true, nome: true } },
       approvers: { include: { user: { select: { id: true, name: true } } } },
     },
   });

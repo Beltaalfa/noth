@@ -120,10 +120,10 @@ function PermissoesModal({
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-zinc-300 mb-2">Grupos</h3>
+            <h3 className="text-sm font-medium text-zinc-300 mb-2">Setores</h3>
             <div className="flex gap-2 mb-2">
               <select value={selGroup} onChange={(e) => setSelGroup(e.target.value)} className="flex-1 px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-700 text-zinc-100 text-sm">
-                <option value="">Selecione um grupo</option>
+                <option value="">Selecione um setor</option>
                 {grupos.filter((g) => !userGroups.some((ug) => ug.groupId === g.id)).map((g) => (
                   <option key={g.id} value={g.id}>{g.name}</option>
                 ))}
@@ -138,14 +138,14 @@ function PermissoesModal({
                 </li>
               ))}
             </ul>
-            {userGroups.length === 0 && <p className="text-zinc-500 text-sm py-2">Nenhum grupo vinculado</p>}
+            {userGroups.length === 0 && <p className="text-zinc-500 text-sm py-2">Nenhum setor vinculado</p>}
           </div>
 
           <div>
-            <h3 className="text-sm font-medium text-zinc-300 mb-2">Setores</h3>
+            <h3 className="text-sm font-medium text-zinc-300 mb-2">Grupos</h3>
             <div className="flex gap-2 mb-2">
               <select value={selSector} onChange={(e) => setSelSector(e.target.value)} className="flex-1 px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-700 text-zinc-100 text-sm">
-                <option value="">Selecione um setor</option>
+                <option value="">Selecione um grupo</option>
                 {setores.filter((s) => !userSectors.some((us) => us.sectorId === s.id)).map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
@@ -160,7 +160,7 @@ function PermissoesModal({
                 </li>
               ))}
             </ul>
-            {userSectors.length === 0 && <p className="text-zinc-500 text-sm py-2">Nenhum setor vinculado</p>}
+            {userSectors.length === 0 && <p className="text-zinc-500 text-sm py-2">Nenhum grupo vinculado</p>}
           </div>
 
           <div className="flex justify-end pt-2">
