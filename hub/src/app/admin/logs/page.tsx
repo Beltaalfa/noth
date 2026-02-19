@@ -68,7 +68,9 @@ export default function LogsPage() {
     setLoading(false);
   }, [page, pageSize]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    queueMicrotask(() => fetchData());
+  }, [fetchData]);
 
   return (
     <div>

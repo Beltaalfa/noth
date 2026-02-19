@@ -8,6 +8,7 @@ import {
   getManagedGroupIdsForUser,
   getManagedSectorIdsForUser,
 } from "@/lib/helpdesk";
+import { patchTicketBodySchema } from "@/lib/schemas/helpdesk";
 
 const VALID_STATUSES: HelpdeskTicketStatus[] = [
   "open", "in_progress", "closed", "pending_approval", "in_approval", "rejected", "approved", "cancelled",
@@ -65,19 +66,18 @@ export async function PATCH(
 
   const { id } = await context.params;
 
-  let body: {
-    status?: string;
-    priority?: string;
-    subject?: string;
-    content?: string;
-    assigneeUserId?: string | null;
-    scheduledAt?: string | null;
-  };
+  let rawBody: unknown;
   try {
-    body = await request.json();
+    rawBody = await request.json();
   } catch {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
+  const parsed = patchTicketBodySchema.safeParse(rawBody);
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map((e) => e.message).join("; ") || "Dados inválidos";
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+  const body = parsed.data;
 
   const canAccess = await canUserAccessTicket(userId, id);
   if (!canAccess) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });

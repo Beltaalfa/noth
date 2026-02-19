@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { MinhasAprovacoesPanel } from "./MinhasAprovacoesPanel";
 import { EncaminharModal } from "./EncaminharModal";
+import { TIPO_CADASTRO_DESCONTO_COMERCIAL } from "@/lib/schemas/helpdesk";
 
 type Cliente = { id: string; name: string };
 type Ticket = {
@@ -47,6 +48,7 @@ const STATUS_LABEL: Record<string, string> = {
   in_approval: "Em análise",
   approved: "Aprovado",
   cancelled: "Cancelado",
+  aguardando_aprovacao_proprietarios: "Aguardando aprovação (2 proprietários)",
 };
 
 const STATUS_CLASS: Record<string, string> = {
@@ -58,6 +60,7 @@ const STATUS_CLASS: Record<string, string> = {
   in_approval: "bg-cyan-500/20 text-cyan-400",
   approved: "bg-emerald-500/20 text-emerald-400",
   cancelled: "bg-zinc-600/50 text-zinc-500",
+  aguardando_aprovacao_proprietarios: "bg-purple-500/20 text-purple-400",
 };
 
 export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
@@ -94,6 +97,16 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
   const [tiposSolicitacaoAll, setTiposSolicitacaoAll] = useState<TipoSolicitacaoItem[]>([]);
   const [tipoSolicitacaoId, setTipoSolicitacaoId] = useState<string>("");
   const [newTicketFiles, setNewTicketFiles] = useState<File[]>([]);
+  const [formDataCadastro, setFormDataCadastro] = useState({
+    nome: "",
+    cep: "",
+    endereco: "",
+    telefone: "",
+    cpfCnpj: "",
+    inscricaoEstadual: "",
+    observacoes: "",
+  });
+  const [valorDesconto, setValorDesconto] = useState("");
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);
@@ -118,6 +131,12 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
     else setSummary(null);
   }, [clientId]);
 
+  const fetchNotifications = useCallback(async () => {
+    const res = await fetch("/api/helpdesk/notifications?unreadOnly=true");
+    const data = await res.json();
+    if (res.ok) setUnreadCount(data.unreadCount ?? 0);
+  }, []);
+
   const fetchTicket = useCallback(async (id: string) => {
     const res = await fetch(`/api/helpdesk/tickets/${id}`);
     const data = await res.json();
@@ -139,13 +158,7 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
     } else {
       toast.error(data.error ?? "Erro ao carregar");
     }
-  }, []);
-
-  const fetchNotifications = useCallback(async () => {
-    const res = await fetch("/api/helpdesk/notifications?unreadOnly=true");
-    const data = await res.json();
-    if (res.ok) setUnreadCount(data.unreadCount ?? 0);
-  }, []);
+  }, [fetchNotifications]);
 
   useEffect(() => {
     fetchNotifications();
@@ -239,24 +252,52 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
     if (!allowed) setTipoSolicitacaoId("");
   }, [assigneeType, assigneeId, tipoSolicitacaoId, tiposSolicitacaoFiltered]);
 
+  const selectedTipoNome = tiposSolicitacaoFiltered.find((t) => t.id === tipoSolicitacaoId)?.nome ?? "";
+  const isTipoCadastroDesconto = selectedTipoNome === TIPO_CADASTRO_DESCONTO_COMERCIAL;
+
   const handleCreate = async () => {
     if (!clientId || !assigneeId || !content.trim()) {
       toast.error("Preencha cliente, destinatário e mensagem");
       return;
     }
+    if (isTipoCadastroDesconto) {
+      if (!formDataCadastro.nome.trim()) {
+        toast.error("Preencha o nome (razão social ou nome completo).");
+        return;
+      }
+      const valor = valorDesconto.replace(",", ".");
+      const num = parseFloat(valor);
+      if (valor === "" || Number.isNaN(num) || num < 0) {
+        toast.error("Informe o valor do desconto em reais (ex.: 0,10 ou 0,20).");
+        return;
+      }
+    }
     setLoading(true);
     try {
+      const body: Record<string, unknown> = {
+        clientId,
+        subject: subject.trim() || undefined,
+        assigneeType,
+        assigneeId,
+        content: content.trim(),
+        tipoSolicitacaoId: tipoSolicitacaoId || undefined,
+      };
+      if (isTipoCadastroDesconto) {
+        body.formData = {
+          nome: formDataCadastro.nome.trim(),
+          cep: formDataCadastro.cep.trim() || undefined,
+          endereco: formDataCadastro.endereco.trim() || undefined,
+          telefone: formDataCadastro.telefone.trim() || undefined,
+          cpfCnpj: formDataCadastro.cpfCnpj.trim() || undefined,
+          inscricaoEstadual: formDataCadastro.inscricaoEstadual.trim() || undefined,
+          observacoes: formDataCadastro.observacoes.trim() || undefined,
+        };
+        body.custoOrcamento = parseFloat(valorDesconto.replace(",", "."));
+      }
       const res = await fetch("/api/helpdesk/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId,
-          subject: subject.trim() || undefined,
-          assigneeType,
-          assigneeId,
-          content: content.trim(),
-          tipoSolicitacaoId: tipoSolicitacaoId || undefined,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (res.ok) {
@@ -283,6 +324,8 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
         setAssigneeId("");
         setTipoSolicitacaoId("");
         setNewTicketFiles([]);
+        setFormDataCadastro({ nome: "", cep: "", endereco: "", telefone: "", cpfCnpj: "", inscricaoEstadual: "", observacoes: "" });
+        setValorDesconto("");
         fetchTickets();
         fetchSummary();
       } else {
@@ -512,7 +555,13 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
               <label className="mb-1.5 block text-sm font-medium text-zinc-400">Tipo de Solicitação</label>
               <select
                 value={tipoSolicitacaoId}
-                onChange={(e) => setTipoSolicitacaoId(e.target.value)}
+                onChange={(e) => {
+                  setTipoSolicitacaoId(e.target.value);
+                  if (tiposSolicitacaoFiltered.find((t) => t.id === e.target.value)?.nome !== TIPO_CADASTRO_DESCONTO_COMERCIAL) {
+                    setFormDataCadastro({ nome: "", cep: "", endereco: "", telefone: "", cpfCnpj: "", inscricaoEstadual: "", observacoes: "" });
+                    setValorDesconto("");
+                  }
+                }}
                 className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
               >
                 <option value="">Nenhum</option>
@@ -522,6 +571,95 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+          {isTipoCadastroDesconto && (
+            <div className="space-y-3 rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
+              <h3 className="text-sm font-semibold text-zinc-300">Dados para cadastro e desconto comercial</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <label htmlFor="cadastro-nome-hp" className="mb-1 block text-xs font-medium text-zinc-400">Nome (razão social ou nome completo) *</label>
+                  <input
+                    id="cadastro-nome-hp"
+                    value={formDataCadastro.nome}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, nome: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="Nome do cliente"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cadastro-cep-hp" className="mb-1 block text-xs font-medium text-zinc-400">CEP</label>
+                  <input
+                    id="cadastro-cep-hp"
+                    value={formDataCadastro.cep}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, cep: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="CEP"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cadastro-telefone-hp" className="mb-1 block text-xs font-medium text-zinc-400">Telefone</label>
+                  <input
+                    id="cadastro-telefone-hp"
+                    value={formDataCadastro.telefone}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, telefone: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="Telefone"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="cadastro-endereco-hp" className="mb-1 block text-xs font-medium text-zinc-400">Endereço</label>
+                  <input
+                    id="cadastro-endereco-hp"
+                    value={formDataCadastro.endereco}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, endereco: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="Endereço"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cadastro-cpfcnpj-hp" className="mb-1 block text-xs font-medium text-zinc-400">CPF ou CNPJ</label>
+                  <input
+                    id="cadastro-cpfcnpj-hp"
+                    value={formDataCadastro.cpfCnpj}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, cpfCnpj: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="CPF ou CNPJ"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cadastro-ie-hp" className="mb-1 block text-xs font-medium text-zinc-400">Inscrição estadual (ou ORG)</label>
+                  <input
+                    id="cadastro-ie-hp"
+                    value={formDataCadastro.inscricaoEstadual}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, inscricaoEstadual: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="IE ou ORG"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="cadastro-observacoes-hp" className="mb-1 block text-xs font-medium text-zinc-400">Volume, combustível, observações</label>
+                  <input
+                    id="cadastro-observacoes-hp"
+                    value={formDataCadastro.observacoes}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, observacoes: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="Volume que abastece, combustível, observações"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cadastro-valor-desconto-hp" className="mb-1 block text-xs font-medium text-zinc-400">Valor do desconto (R$) *</label>
+                  <input
+                    id="cadastro-valor-desconto-hp"
+                    type="text"
+                    inputMode="decimal"
+                    value={valorDesconto}
+                    onChange={(e) => setValorDesconto(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="Ex.: 0,10 ou 0,20"
+                  />
+                </div>
+              </div>
             </div>
           )}
           <div>

@@ -77,6 +77,7 @@ model User {
   approvalConfigApprovers HelpdeskApprovalConfigApprover[]
   approvalLogs          HelpdeskApprovalLog[]
   helpdeskTicketAuxAssignees HelpdeskTicketAuxAssignee[]
+  clientProprietarios   ClientProprietario[]
 
   @@index([deletedAt])
   @@index([primaryGroupId])
@@ -109,8 +110,22 @@ model Client {
   helpdeskApprovalConfigs HelpdeskApprovalConfig[]
   helpdeskTenant HelpdeskTenant?
   helpdeskTipoSolicitacoes HelpdeskTipoSolicitacao[]
+  clientProprietarios ClientProprietario[]
 
   @@index([deletedAt])
+}
+
+model ClientProprietario {
+  id        String   @id @default(cuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([clientId, userId])
+  @@index([clientId])
+  @@index([userId])
 }
 
 model HelpdeskTipoSolicitacao {
@@ -356,6 +371,7 @@ enum HelpdeskTicketStatus {
   negado
   atualizado
   concluido
+  aguardando_aprovacao_proprietarios
 }
 
 enum HelpdeskApprovalType {
@@ -396,6 +412,8 @@ model HelpdeskTicket {
   slaLimitHours   Int?
   scheduledAt     DateTime?
   custoOrcamento  Decimal?            @db.Decimal(15, 2)
+  formData        Json?               // Dados do formulário dinâmico (ex.: cadastro de cliente)
+  workflowStep    String?            // Etapa do fluxo: "credito" | "gerencia" | "proprietarios"
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 

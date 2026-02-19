@@ -61,8 +61,10 @@ function PermissoesModal({
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    fetchPerm().then(() => setLoading(false));
+    queueMicrotask(() => {
+      setLoading(true);
+      fetchPerm().then(() => setLoading(false));
+    });
   }, [fetchPerm]);
 
   const userClients = permData?.userClient.filter((uc) => uc.userId === user.id) ?? [];

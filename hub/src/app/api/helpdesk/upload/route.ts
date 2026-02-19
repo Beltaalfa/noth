@@ -4,6 +4,7 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/prisma";
 import { canUserAccessTicket } from "@/lib/helpdesk";
+import { checkRateLimit, getRateLimitKey } from "@/lib/rateLimit";
 
 const MAX_SIZE = 20 * 1024 * 1024; // 20MB
 const ALLOWED_TYPES = /^(image|audio|video|application|text)\//;
@@ -13,6 +14,11 @@ export async function POST(request: Request) {
   if (!session) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const userId = (session.user as { id?: string })?.id;
   if (!userId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
+
+  const rl = checkRateLimit(getRateLimitKey(userId, "helpdesk:upload"));
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Muitas requisições. Tente novamente em alguns instantes." }, { status: 429 });
+  }
 
   const formData = await request.formData();
   const ticketId = formData.get("ticketId") as string | null;

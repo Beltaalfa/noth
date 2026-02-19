@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { EncaminharModal } from "./EncaminharModal";
+import { TIPO_CADASTRO_DESCONTO_COMERCIAL } from "@/lib/schemas/helpdesk";
 
 type Cliente = { id: string; name: string };
 type Ticket = {
@@ -74,6 +75,7 @@ const STATUS_LABEL: Record<string, string> = {
   negado: "Negado",
   atualizado: "Atualizado",
   concluido: "Concluído",
+  aguardando_aprovacao_proprietarios: "Aguardando aprovação (2 proprietários)",
 };
 const PRIORITY_LABEL: Record<string, string> = {
   baixa: "Baixa",
@@ -83,8 +85,7 @@ const PRIORITY_LABEL: Record<string, string> = {
 };
 
 export function MeusChamadosPage({ clientes }: { clientes: Cliente[] }) {
-  const { data: session } = useSession();
-  const userId = (session?.user as { id?: string })?.id;
+  useSession();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<{
@@ -118,6 +119,16 @@ export function MeusChamadosPage({ clientes }: { clientes: Cliente[] }) {
   const [creating, setCreating] = useState(false);
   const [newTicketFiles, setNewTicketFiles] = useState<File[]>([]);
   const [replyFiles, setReplyFiles] = useState<File[]>([]);
+  const [formDataCadastro, setFormDataCadastro] = useState({
+    nome: "",
+    cep: "",
+    endereco: "",
+    telefone: "",
+    cpfCnpj: "",
+    inscricaoEstadual: "",
+    observacoes: "",
+  });
+  const [valorDesconto, setValorDesconto] = useState("");
 
   const fetchDestinatarios = useCallback(async (cid: string) => {
     if (!cid) return;
@@ -192,25 +203,53 @@ export function MeusChamadosPage({ clientes }: { clientes: Cliente[] }) {
     if (!allowed) setTipoSolicitacaoId("");
   }, [assigneeType, assigneeId, tipoSolicitacaoId, tiposSolicitacaoFiltered]);
 
+  const selectedTipoNome = tiposSolicitacaoFiltered.find((t) => t.id === tipoSolicitacaoId)?.nome ?? "";
+  const isTipoCadastroDesconto = selectedTipoNome === TIPO_CADASTRO_DESCONTO_COMERCIAL;
+
   const handleCreateTicket = async () => {
     if (!newTicketClientId || !assigneeId || !newTicketContent.trim()) {
       toast.error("Preencha o destinatário e a mensagem.");
       return;
     }
+    if (isTipoCadastroDesconto) {
+      if (!formDataCadastro.nome.trim()) {
+        toast.error("Preencha o nome (razão social ou nome completo).");
+        return;
+      }
+      const valor = valorDesconto.replace(",", ".");
+      const num = parseFloat(valor);
+      if (valor === "" || Number.isNaN(num) || num < 0) {
+        toast.error("Informe o valor do desconto em reais (ex.: 0,10 ou 0,20).");
+        return;
+      }
+    }
     setCreating(true);
     try {
+      const body: Record<string, unknown> = {
+        clientId: newTicketClientId,
+        subject: subject.trim() || undefined,
+        assigneeType,
+        assigneeId,
+        content: newTicketContent.trim(),
+        tipoSolicitacaoId: tipoSolicitacaoId || undefined,
+        priority: newTicketPriority || undefined,
+      };
+      if (isTipoCadastroDesconto) {
+        body.formData = {
+          nome: formDataCadastro.nome.trim(),
+          cep: formDataCadastro.cep.trim() || undefined,
+          endereco: formDataCadastro.endereco.trim() || undefined,
+          telefone: formDataCadastro.telefone.trim() || undefined,
+          cpfCnpj: formDataCadastro.cpfCnpj.trim() || undefined,
+          inscricaoEstadual: formDataCadastro.inscricaoEstadual.trim() || undefined,
+          observacoes: formDataCadastro.observacoes.trim() || undefined,
+        };
+        body.custoOrcamento = parseFloat(valorDesconto.replace(",", "."));
+      }
       const res = await fetch("/api/helpdesk/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId: newTicketClientId,
-          subject: subject.trim() || undefined,
-          assigneeType,
-          assigneeId,
-          content: newTicketContent.trim(),
-          tipoSolicitacaoId: tipoSolicitacaoId || undefined,
-          priority: newTicketPriority || undefined,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (res.ok) {
@@ -238,6 +277,8 @@ export function MeusChamadosPage({ clientes }: { clientes: Cliente[] }) {
         setTipoSolicitacaoId("");
         setNewTicketPriority("");
         setNewTicketFiles([]);
+        setFormDataCadastro({ nome: "", cep: "", endereco: "", telefone: "", cpfCnpj: "", inscricaoEstadual: "", observacoes: "" });
+        setValorDesconto("");
         fetchTickets();
         fetchSummary();
       } else {
@@ -449,7 +490,13 @@ export function MeusChamadosPage({ clientes }: { clientes: Cliente[] }) {
               <label className="mb-1.5 block text-sm font-medium text-zinc-400">Tipo de Solicitação</label>
               <select
                 value={tipoSolicitacaoId}
-                onChange={(e) => setTipoSolicitacaoId(e.target.value)}
+                onChange={(e) => {
+                  setTipoSolicitacaoId(e.target.value);
+                  if (tiposSolicitacaoFiltered.find((t) => t.id === e.target.value)?.nome !== TIPO_CADASTRO_DESCONTO_COMERCIAL) {
+                    setFormDataCadastro({ nome: "", cep: "", endereco: "", telefone: "", cpfCnpj: "", inscricaoEstadual: "", observacoes: "" });
+                    setValorDesconto("");
+                  }
+                }}
                 className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
               >
                 <option value="">Nenhum</option>
@@ -461,12 +508,103 @@ export function MeusChamadosPage({ clientes }: { clientes: Cliente[] }) {
               </select>
             </div>
           )}
+          {isTipoCadastroDesconto && (
+            <div className="space-y-3 rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4">
+              <h3 className="text-sm font-semibold text-zinc-300">Dados para cadastro e desconto comercial</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <label htmlFor="cadastro-nome" className="mb-1 block text-xs font-medium text-zinc-400">Nome (razão social ou nome completo) *</label>
+                  <input
+                    id="cadastro-nome"
+                    value={formDataCadastro.nome}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, nome: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="Nome do cliente"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cadastro-cep" className="mb-1 block text-xs font-medium text-zinc-400">CEP</label>
+                  <input
+                    id="cadastro-cep"
+                    value={formDataCadastro.cep}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, cep: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="CEP"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cadastro-telefone" className="mb-1 block text-xs font-medium text-zinc-400">Telefone</label>
+                  <input
+                    id="cadastro-telefone"
+                    value={formDataCadastro.telefone}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, telefone: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="Telefone"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="cadastro-endereco" className="mb-1 block text-xs font-medium text-zinc-400">Endereço</label>
+                  <input
+                    id="cadastro-endereco"
+                    value={formDataCadastro.endereco}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, endereco: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="Endereço"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cadastro-cpfcnpj" className="mb-1 block text-xs font-medium text-zinc-400">CPF ou CNPJ</label>
+                  <input
+                    id="cadastro-cpfcnpj"
+                    value={formDataCadastro.cpfCnpj}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, cpfCnpj: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="CPF ou CNPJ"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cadastro-ie" className="mb-1 block text-xs font-medium text-zinc-400">Inscrição estadual (ou ORG)</label>
+                  <input
+                    id="cadastro-ie"
+                    value={formDataCadastro.inscricaoEstadual}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, inscricaoEstadual: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="IE ou ORG"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label htmlFor="cadastro-observacoes" className="mb-1 block text-xs font-medium text-zinc-400">Volume, combustível, observações</label>
+                  <input
+                    id="cadastro-observacoes"
+                    value={formDataCadastro.observacoes}
+                    onChange={(e) => setFormDataCadastro((f) => ({ ...f, observacoes: e.target.value }))}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="Volume que abastece, combustível, observações"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="cadastro-valor-desconto" className="mb-1 block text-xs font-medium text-zinc-400">Valor do desconto (R$) *</label>
+                  <input
+                    id="cadastro-valor-desconto"
+                    type="text"
+                    inputMode="decimal"
+                    value={valorDesconto}
+                    onChange={(e) => setValorDesconto(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+                    placeholder="Ex.: 0,10 ou 0,20"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-400">Prioridade</label>
+            <label htmlFor="new-ticket-priority" className="mb-1.5 block text-sm font-medium text-zinc-400">Prioridade</label>
             <select
+              id="new-ticket-priority"
               value={newTicketPriority}
               onChange={(e) => setNewTicketPriority(e.target.value)}
               className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+              aria-label="Prioridade do chamado"
             >
               <option value="">Nenhuma</option>
               <option value="baixa">Baixa</option>
@@ -476,35 +614,41 @@ export function MeusChamadosPage({ clientes }: { clientes: Cliente[] }) {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-400">Assunto</label>
+            <label htmlFor="new-ticket-subject" className="mb-1.5 block text-sm font-medium text-zinc-400">Assunto</label>
             <input
+              id="new-ticket-subject"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
               placeholder="Assunto do chamado"
+              aria-label="Assunto do chamado"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-zinc-400">Mensagem</label>
+            <label htmlFor="new-ticket-message" className="mb-1.5 block text-sm font-medium text-zinc-400">Mensagem</label>
             <textarea
+              id="new-ticket-message"
               value={newTicketContent}
               onChange={(e) => setNewTicketContent(e.target.value)}
               rows={5}
               className="w-full resize-none rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
               placeholder="Descreva aqui o seu chamado"
+              aria-label="Mensagem do chamado"
             />
           </div>
           <div>
-            <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-zinc-400">
+            <label htmlFor="new-ticket-attachments" className="mb-1.5 flex items-center gap-2 text-sm font-medium text-zinc-400">
               <IconPaperclip size={16} />
               Anexar documentos
             </label>
             <input
+              id="new-ticket-attachments"
               type="file"
               multiple
               accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
               className="mt-1 block w-full text-sm text-zinc-400 file:mr-2 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-1.5 file:text-zinc-200 file:hover:bg-zinc-600"
               onChange={(e) => setNewTicketFiles(Array.from(e.target.files ?? []))}
+              aria-label="Anexar documentos ao chamado"
             />
             {newTicketFiles.length > 0 && (
               <ul className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-500">

@@ -166,9 +166,27 @@ export async function canUserAccessTicket(userId: string, ticketId: string): Pro
 export async function canUserApproveTicket(userId: string, ticketId: string): Promise<boolean> {
   const ticket = await prisma.helpdeskTicket.findUnique({
     where: { id: ticketId },
-    select: { assigneeGroupId: true, assigneeSectorId: true, status: true, tipoSolicitacaoId: true },
+    select: {
+      assigneeGroupId: true,
+      assigneeSectorId: true,
+      status: true,
+      workflowStep: true,
+      clientId: true,
+      tipoSolicitacaoId: true,
+    },
   });
-  if (!ticket || ticket.status !== "pending_approval") return false;
+  if (!ticket) return false;
+  if (ticket.status !== "pending_approval" && ticket.status !== "aguardando_aprovacao_proprietarios") return false;
+
+  if (
+    ticket.status === "aguardando_aprovacao_proprietarios" &&
+    ticket.workflowStep === "proprietarios"
+  ) {
+    const isProprietario = await prisma.clientProprietario.findFirst({
+      where: { clientId: ticket.clientId, userId },
+    });
+    return !!isProprietario;
+  }
 
   const approver = await prisma.helpdeskApprovalConfigApprover.findFirst({
     where: { userId },

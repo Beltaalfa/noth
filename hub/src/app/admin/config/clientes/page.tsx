@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { IconPlus, IconPencil, IconTrash, IconUpload, IconTools } from "@tabler/icons-react";
+import Image from "next/image";
+import { IconPlus, IconPencil, IconTrash, IconUpload, IconTools, IconUsers } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -139,6 +140,145 @@ function FerramentasClienteModal({
   );
 }
 
+type ProprietarioItem = {
+  id: string;
+  userId: string;
+  createdAt: string;
+  user: { id: string; name: string; email: string };
+};
+
+function ProprietariosClienteModal({
+  client,
+  onClose,
+}: {
+  client: Cliente;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [proprietarios, setProprietarios] = useState<ProprietarioItem[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<{ id: string; name: string; email: string }[]>([]);
+  const [selUserId, setSelUserId] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  const fetchData = useCallback(async () => {
+    const res = await fetch(`/api/admin/clientes/${client.id}/proprietarios`);
+    if (res.ok) {
+      const data = await res.json();
+      setProprietarios(data.proprietarios ?? []);
+      setAvailableUsers(data.availableUsers ?? []);
+    }
+    setLoading(false);
+  }, [client.id]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchData();
+  }, [fetchData]);
+
+  const addProprietario = async () => {
+    if (!selUserId) return;
+    setAdding(true);
+    try {
+      const res = await fetch(`/api/admin/clientes/${client.id}/proprietarios`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: selUserId }),
+      });
+      if (res.ok) {
+        toast.success("Proprietário adicionado.");
+        setSelUserId("");
+        fetchData();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Erro ao adicionar");
+      }
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const removeProprietario = async (proprietarioId: string) => {
+    if (!confirm("Remover este proprietário do cliente?")) return;
+    setRemoving(proprietarioId);
+    try {
+      const res = await fetch(`/api/admin/clientes/${client.id}/proprietarios/${proprietarioId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        toast.success("Proprietário removido.");
+        fetchData();
+      } else {
+        toast.error("Erro ao remover");
+      }
+    } finally {
+      setRemoving(null);
+    }
+  };
+
+  const userIdsAlreadyProprietarios = new Set(proprietarios.map((p) => p.userId));
+  const usersToAdd = availableUsers.filter((u) => !userIdsAlreadyProprietarios.has(u.id));
+
+  return (
+    <Modal isOpen onClose={onClose} title={`Proprietários - ${client.name}`} maxWidth="lg">
+      {loading ? (
+        <p className="text-zinc-500 py-4">Carregando...</p>
+      ) : (
+        <div className="space-y-5">
+          <p className="text-xs text-zinc-500">
+            Proprietários do cliente podem aprovar chamados de tipo &quot;Cadastro e aprovação de desconto comercial&quot; quando o valor do desconto for maior que 20 centavos (são necessárias 2 aprovações de proprietários).
+          </p>
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-300 border-b border-zinc-700 pb-2 mb-3">Proprietários vinculados</h3>
+            {proprietarios.length === 0 ? (
+              <p className="text-zinc-500 text-sm">Nenhum proprietário vinculado.</p>
+            ) : (
+              <ul className="space-y-2">
+                {proprietarios.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between py-2 border-b border-zinc-800">
+                    <span className="text-sm text-zinc-200">{p.user.name} ({p.user.email})</span>
+                    <button
+                      type="button"
+                      onClick={() => removeProprietario(p.id)}
+                      disabled={removing === p.id}
+                      className="text-red-400 hover:text-red-300 text-sm disabled:opacity-50"
+                    >
+                      {removing === p.id ? "Removendo..." : "Remover"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-300 border-b border-zinc-700 pb-2 mb-3">Adicionar proprietário</h3>
+            <p className="text-xs text-zinc-500 mb-2">Apenas usuários com acesso a este cliente podem ser proprietários.</p>
+            <div className="flex gap-2 flex-wrap items-center">
+              <select
+                value={selUserId}
+                onChange={(e) => setSelUserId(e.target.value)}
+                className="rounded-lg bg-zinc-900/50 border border-zinc-700 text-zinc-100 px-3 py-2 min-w-[200px]"
+                aria-label="Selecionar usuário"
+              >
+                <option value="">Selecione um usuário</option>
+                {usersToAdd.map((u) => (
+                  <option key={u.id} value={u.id}>{u.name} ({u.email})</option>
+                ))}
+              </select>
+              <Button type="button" onClick={addProprietario} disabled={!selUserId || adding} isLoading={adding}>
+                Adicionar
+              </Button>
+            </div>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button variant="secondary" onClick={onClose}>Fechar</Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 export default function ClientesPage() {
   const [data, setData] = useState<Cliente[]>([]);
   const [total, setTotal] = useState(0);
@@ -148,6 +288,7 @@ export default function ClientesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Cliente | null>(null);
   const [ferramentasModalCliente, setFerramentasModalCliente] = useState<Cliente | null>(null);
+  const [proprietariosModalCliente, setProprietariosModalCliente] = useState<Cliente | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sortKey, setSortKey] = useState("");
   const [sortDirection, setSortDirection] = useState<SortDirection>("default");
@@ -307,7 +448,7 @@ export default function ClientesPage() {
                 header: "Logo",
                 render: (r) =>
                   r.logoUrl ? (
-                    <img src={r.logoUrl} alt="" className="h-8 w-auto object-contain max-w-[80px]" />
+                    <Image src={r.logoUrl} alt="" width={80} height={32} className="h-8 w-auto object-contain max-w-[80px]" />
                   ) : (
                     <span className="text-zinc-500">-</span>
                   ),
@@ -327,6 +468,13 @@ export default function ClientesPage() {
                 header: "Ações",
                 render: (r) => (
                   <div className="flex gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setProprietariosModalCliente(r); }}
+                      className="p-2 rounded-lg text-zinc-400 hover:text-amber-400 hover:bg-zinc-800"
+                      title="Proprietários do cliente"
+                    >
+                      <IconUsers size={18} strokeWidth={2} />
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); setFerramentasModalCliente(r); }}
                       className="p-2 rounded-lg text-zinc-400 hover:text-amber-400 hover:bg-zinc-800"
@@ -397,7 +545,7 @@ export default function ClientesPage() {
                 />
               </label>
               {editing?.logoUrl && !logoFile && (
-                <img src={editing.logoUrl} alt="" className="h-10 w-auto object-contain" />
+                <Image src={editing.logoUrl} alt="" width={40} height={40} className="h-10 w-auto object-contain" />
               )}
             </div>
           </div>
@@ -427,6 +575,12 @@ export default function ClientesPage() {
         <FerramentasClienteModal
           client={ferramentasModalCliente}
           onClose={() => setFerramentasModalCliente(null)}
+        />
+      )}
+      {proprietariosModalCliente && (
+        <ProprietariosClienteModal
+          client={proprietariosModalCliente}
+          onClose={() => setProprietariosModalCliente(null)}
         />
       )}
     </div>

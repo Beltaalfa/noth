@@ -83,7 +83,7 @@ export default function TiposSolicitacaoPage() {
 
   useEffect(() => {
     if (clientes.length && !clientId) setClientId(clientes[0].id);
-  }, [clientes]);
+  }, [clientes, clientId]);
 
   useEffect(() => {
     if (clientId) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, Suspense } from "react";
+import Image from "next/image";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
@@ -48,17 +49,12 @@ function LoginForm() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="flex justify-center mb-2 min-h-[48px] items-center">
-            <img
+            <Image
               src="/logo.svg"
               alt="Hub Nortempresarial"
               width={140}
               height={48}
               className="h-12 w-auto object-contain [color:white]"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-                const fallback = e.currentTarget.nextElementSibling;
-                if (fallback) (fallback as HTMLElement).style.display = "block";
-              }}
             />
             <span className="text-2xl font-bold text-zinc-100" style={{ display: "none" }}>
               Hub
@@ -76,7 +72,7 @@ function LoginForm() {
           </h2>
 
           {error ? (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm" role="alert" aria-live="polite">
               {error}
             </div>
           ) : null}

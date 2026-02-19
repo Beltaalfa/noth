@@ -80,17 +80,21 @@ export function AreasGeridasPage() {
   }, [groupId, sectorId]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchArvore().then(() => setLoading(false));
+    queueMicrotask(() => {
+      setLoading(true);
+      fetchArvore().then(() => setLoading(false));
+    });
   }, [fetchArvore]);
 
   useEffect(() => {
-    if (groupId || sectorId) {
-      setLoading(true);
-      fetchTickets().then(() => setLoading(false));
-    } else {
-      setTickets([]);
-    }
+    queueMicrotask(() => {
+      if (groupId || sectorId) {
+        setLoading(true);
+        fetchTickets().then(() => setLoading(false));
+      } else {
+        setTickets([]);
+      }
+    });
   }, [groupId, sectorId, fetchTickets]);
 
   const areas = aggregateByArea(tree);

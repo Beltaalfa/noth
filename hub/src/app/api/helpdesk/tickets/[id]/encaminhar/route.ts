@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canUserAccessTicket, getHelpdeskProfile, userHasAccessToClient } from "@/lib/helpdesk";
+import { encaminharBodySchema } from "@/lib/schemas/helpdesk";
 
 export async function POST(
   request: Request,
@@ -22,22 +23,18 @@ export async function POST(
 
   const { id } = await context.params;
 
-  let body: {
-    novoResponsavelUserId: string;
-    operadoresAuxiliaresIds?: string[];
-    scheduledAt?: string | null;
-    comentario?: string | null;
-  };
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
-
-  const { novoResponsavelUserId, operadoresAuxiliaresIds = [], scheduledAt, comentario } = body;
-  if (!novoResponsavelUserId?.trim()) {
-    return NextResponse.json({ error: "novoResponsavelUserId obrigatório" }, { status: 400 });
+  const parsed = encaminharBodySchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map((e) => e.message).join("; ") || "Dados inválidos";
+    return NextResponse.json({ error: msg }, { status: 400 });
   }
+  const { novoResponsavelUserId, operadoresAuxiliaresIds = [], scheduledAt, comentario } = parsed.data;
 
   const canAccess = await canUserAccessTicket(userId, id);
   if (!canAccess) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });

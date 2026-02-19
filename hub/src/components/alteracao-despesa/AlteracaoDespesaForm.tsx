@@ -20,7 +20,7 @@ function parseSequencias(val: string): number[] {
 export function AlteracaoDespesaForm() {
   const [centros, setCentros] = useState<CentroCusto[]>([]);
   const [tipos, setTipos] = useState<TipoDespesa[]>([]);
-  const [despesas, setDespesas] = useState<Despesa[]>([]);
+  const [, setDespesas] = useState<Despesa[]>([]);
   const [seqInput, setSeqInput] = useState("");
   const [alterarCentro, setAlterarCentro] = useState(false);
   const [alterarTipo, setAlterarTipo] = useState(false);

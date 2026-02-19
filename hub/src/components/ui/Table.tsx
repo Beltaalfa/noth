@@ -33,16 +33,23 @@ export function Table<T extends Record<string, unknown>>({
   onSort,
 }: TableProps<T>) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-800">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto rounded-lg border border-zinc-800" role="region" aria-label="Tabela de dados">
+      <table className="w-full text-sm" role="table">
         <thead>
           <tr className="border-b border-zinc-800 bg-zinc-900/50">
             {columns.map((col) => {
               const isSorted = sortKey === col.key && sortDirection !== "default";
               const canSort = col.sortable === true && onSort;
+              const ariaSort = canSort && isSorted
+                ? (sortDirection === "asc" ? "ascending" as const : "descending" as const)
+                : canSort
+                  ? "none" as const
+                  : undefined;
               return (
                 <th
                   key={col.key}
+                  scope="col"
+                  aria-sort={ariaSort}
                   className={`px-4 py-3 text-left font-medium text-zinc-400 ${canSort ? "cursor-pointer select-none hover:text-zinc-200 hover:bg-zinc-800/50" : ""}`}
                   onClick={() => canSort && onSort(col.key)}
                 >

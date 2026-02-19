@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import {
   getClientIdsForUser,
   getGroupIdsForUser,
@@ -12,6 +13,12 @@ import {
   getQueueGroupIdsForUser,
   getQueueSectorIdsForUser,
 } from "@/lib/helpdesk";
+import {
+  createTicketBodySchema,
+  TIPO_CADASTRO_DESCONTO_COMERCIAL,
+  formDataCadastroDescontoSchema,
+} from "@/lib/schemas/helpdesk";
+import { checkRateLimit, getRateLimitKey } from "@/lib/rateLimit";
 
 const includeList = {
   creator: { select: { id: true, name: true } },
@@ -101,13 +108,15 @@ export async function GET(request: Request) {
       delete where.OR;
     }
   } else if (!isAdmin) {
-    const [groupIds, sectorIds, approverConfigs] = await Promise.all([
+    const [groupIds, sectorIds, approverConfigs, clientIdsProprietario] = await Promise.all([
       getGroupIdsForUser(userId),
       getSectorIdsForUser(userId),
       prisma.helpdeskApprovalConfigApprover.findMany({ where: { userId }, select: { config: { select: { groupId: true, sectorId: true } } } }),
+      prisma.clientProprietario.findMany({ where: { userId }, select: { clientId: true } }),
     ]);
     const approverGroupIds = approverConfigs.filter((c) => c.config.groupId).map((c) => c.config.groupId!);
     const approverSectorIds = approverConfigs.filter((c) => c.config.sectorId).map((c) => c.config.sectorId!);
+    const clientIdsProprietarioSet = clientIdsProprietario.map((p) => p.clientId);
     where.OR = [
       { createdById: userId },
       { assigneeType: "user", assigneeUserId: userId },
@@ -115,6 +124,9 @@ export async function GET(request: Request) {
       { assigneeType: "sector", assigneeSectorId: { in: Array.from(sectorIds) } },
       ...(approverGroupIds.length ? [{ status: "pending_approval", assigneeType: "group", assigneeGroupId: { in: approverGroupIds } }] : []),
       ...(approverSectorIds.length ? [{ status: "pending_approval", assigneeType: "sector", assigneeSectorId: { in: approverSectorIds } }] : []),
+      ...(clientIdsProprietarioSet.length > 0
+        ? [{ status: "aguardando_aprovacao_proprietarios", clientId: { in: clientIdsProprietarioSet } }]
+        : []),
     ];
   }
 
@@ -133,19 +145,46 @@ export async function POST(request: Request) {
   const userId = (session.user as { id?: string })?.id;
   if (!userId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
 
-  let body: { clientId: string; subject?: string; assigneeType: "user" | "group" | "sector"; assigneeId: string; content: string; tipoSolicitacaoId?: string; priority?: string };
+  const rl = checkRateLimit(getRateLimitKey(userId, "ticket:create"));
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Muitas requisições. Tente novamente em alguns instantes." }, { status: 429 });
+  }
+
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
-
-  const { clientId, subject, assigneeType, assigneeId, content, tipoSolicitacaoId } = body;
-  if (!clientId || !assigneeType || !assigneeId || !content?.trim()) {
-    return NextResponse.json({ error: "clientId, assigneeType, assigneeId e content são obrigatórios" }, { status: 400 });
+  const parsed = createTicketBodySchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map((e) => e.message).join("; ") || "Dados inválidos";
+    return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 });
   }
-  if (!["user", "group", "sector"].includes(assigneeType)) {
-    return NextResponse.json({ error: "assigneeType inválido" }, { status: 400 });
+  const { clientId, subject, assigneeType, assigneeId, content, tipoSolicitacaoId, formData, custoOrcamento } = parsed.data;
+
+  let workflowStep: string | null = null;
+  let formDataToSave: Record<string, unknown> | null = null;
+  let custoOrcamentoToSave: number | null = null;
+
+  if (tipoSolicitacaoId) {
+    const tipo = await prisma.helpdeskTipoSolicitacao.findUnique({
+      where: { id: tipoSolicitacaoId },
+      select: { nome: true },
+    });
+    if (tipo?.nome === TIPO_CADASTRO_DESCONTO_COMERCIAL) {
+      workflowStep = "credito";
+      const formParsed = formDataCadastroDescontoSchema.safeParse(formData ?? {});
+      if (!formParsed.success) {
+        const msg = formParsed.error.issues.map((e) => e.message).join("; ") || "formData inválido";
+        return NextResponse.json({ error: msg, details: formParsed.error.flatten() }, { status: 400 });
+      }
+      if (custoOrcamento == null || Number.isNaN(custoOrcamento) || custoOrcamento < 0) {
+        return NextResponse.json({ error: "Valor do desconto é obrigatório para este tipo de solicitação" }, { status: 400 });
+      }
+      formDataToSave = formParsed.data as unknown as Record<string, unknown>;
+      custoOrcamentoToSave = Number(custoOrcamento);
+    }
   }
 
   const canCreate = await canUserCreateTicketFor(userId, clientId, assigneeType, assigneeId);
@@ -176,7 +215,7 @@ export async function POST(request: Request) {
   });
   const proximoNumero = (maxNumero._max.numero ?? 0) + 1;
 
-  const priority = body.priority && ["baixa", "media", "alta", "critica"].includes(body.priority) ? body.priority : null;
+  const priority = parsed.data.priority ?? null;
 
   const ticket = await prisma.helpdeskTicket.create({
     data: {
@@ -191,6 +230,9 @@ export async function POST(request: Request) {
       assigneeGroupId: assigneeType === "group" ? assigneeId : null,
       assigneeSectorId: assigneeType === "sector" ? assigneeId : null,
       createdById: userId,
+      workflowStep,
+      formData: (formDataToSave ?? undefined) as Prisma.InputJsonValue | undefined,
+      custoOrcamento: custoOrcamentoToSave ?? undefined,
       messages: {
         create: { userId, content: content.trim() },
       },

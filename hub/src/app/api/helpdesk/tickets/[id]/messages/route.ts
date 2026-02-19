@@ -2,6 +2,8 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { canUserAccessTicket } from "@/lib/helpdesk";
+import { messageBodySchema } from "@/lib/schemas/helpdesk";
+import { checkRateLimit, getRateLimitKey } from "@/lib/rateLimit";
 
 export async function POST(
   request: Request,
@@ -16,17 +18,26 @@ export async function POST(
   const canAccess = await canUserAccessTicket(userId, ticketId);
   if (!canAccess) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
-  let body: { content: string };
+  const rl = checkRateLimit(getRateLimitKey(userId, "ticket:message"));
+  if (!rl.ok) {
+    return NextResponse.json({ error: "Muitas requisições. Tente novamente em alguns instantes." }, { status: 429 });
+  }
+
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
-  const content = body.content;
-  if (!content?.trim()) return NextResponse.json({ error: "content é obrigatório" }, { status: 400 });
+  const parsed = messageBodySchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map((e) => e.message).join("; ") || "Dados inválidos";
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+  const content = parsed.data.content;
 
   const message = await prisma.helpdeskMessage.create({
-    data: { ticketId, userId, content: content.trim() },
+    data: { ticketId, userId, content },
     include: { user: { select: { id: true, name: true } }, attachments: true },
   });
   const ticketForStatus = await prisma.helpdeskTicket.findUnique({

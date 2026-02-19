@@ -13,7 +13,9 @@
     "db:push": "prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",
     "migrate-helpdesk": "npx tsx scripts/migrate-helpdesk-to-tenants.ts",
-    "verificar-tenant": "npx tsx scripts/verificar-tenant-helpdesk.ts"
+    "verificar-tenant": "npx tsx scripts/verificar-tenant-helpdesk.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
@@ -40,11 +42,13 @@
     "@types/pg": "^8.16.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5.1.4",
     "dotenv": "^17.3.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.18"
   }
 }

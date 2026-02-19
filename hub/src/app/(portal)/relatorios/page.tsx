@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { IconReport } from "@tabler/icons-react";
 
 type Report = {
@@ -50,7 +51,7 @@ export default function RelatoriosPage() {
           >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-zinc-800 overflow-hidden">
               {r.client.logoUrl ? (
-                <img src={r.client.logoUrl} alt={r.client.name} className="h-10 w-10 object-contain" />
+                <Image src={r.client.logoUrl} alt={r.client.name} width={40} height={40} className="h-10 w-10 object-contain" />
               ) : (
                 <IconReport size={24} strokeWidth={2} className="text-zinc-400" />
               )}

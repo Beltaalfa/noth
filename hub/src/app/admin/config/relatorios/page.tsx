@@ -54,8 +54,10 @@ function ToolPermissoesModal({
   }, [tool.id]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchData().then(() => setLoading(false));
+    queueMicrotask(() => {
+      setLoading(true);
+      fetchData().then(() => setLoading(false));
+    });
   }, [fetchData]);
 
   const getName = (type: string, id: string) => {

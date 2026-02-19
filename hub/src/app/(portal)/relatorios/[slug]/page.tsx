@@ -4,6 +4,7 @@ import { canUserAccessReport } from "@/lib/permissions";
 import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
 import Link from "next/link";
+import Image from "next/image";
 import { IconArrowLeft, IconMaximize } from "@tabler/icons-react";
 
 export default async function RelatorioPage({
@@ -54,7 +55,7 @@ export default async function RelatorioPage({
           <IconArrowLeft size={20} strokeWidth={2} />
         </Link>
         {tool.client.logoUrl ? (
-          <img src={tool.client.logoUrl} alt={tool.client.name} className="h-8 w-auto object-contain" />
+          <Image src={tool.client.logoUrl} alt={tool.client.name} width={80} height={32} className="h-8 w-auto object-contain" />
         ) : (
           <span className="text-sm font-medium text-zinc-400">{tool.client.name}</span>
         )}

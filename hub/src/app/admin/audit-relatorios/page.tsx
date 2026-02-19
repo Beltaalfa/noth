@@ -29,7 +29,7 @@ export default function AuditRelatoriosPage() {
   }, [from, to]);
 
   useEffect(() => {
-    fetchData();
+    queueMicrotask(() => fetchData());
   }, [fetchData]);
 
   return (

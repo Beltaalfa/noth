@@ -90,8 +90,10 @@ export function ArvorePage() {
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    fetchArvore().then(() => setLoading(false));
+    queueMicrotask(() => {
+      setLoading(true);
+      fetchArvore().then(() => setLoading(false));
+    });
   }, [fetchArvore]);
 
   const onToggle = (id: string) => {
