@@ -1,7 +1,21 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { canUserAccessTicket } from "@/lib/helpdesk";
+import { HelpdeskTicketStatus, HelpdeskTicketPriority } from "@prisma/client";
+import {
+  canUserAccessTicket,
+  getHelpdeskProfile,
+  getManagedGroupIdsForUser,
+  getManagedSectorIdsForUser,
+} from "@/lib/helpdesk";
+
+const VALID_STATUSES: HelpdeskTicketStatus[] = [
+  "open", "in_progress", "closed", "pending_approval", "in_approval", "rejected", "approved", "cancelled",
+  "agendado_com_usuario", "aguardando_atendimento", "em_atendimento", "aguardando_feedback_usuario",
+  "encaminhado_operador", "indisponivel_atendimento", "reaberto", "retornado_usuario",
+  "custo_aguardando_aprovacao", "autorizado", "negado", "atualizado", "concluido",
+];
+const VALID_PRIORITIES: HelpdeskTicketPriority[] = ["baixa", "media", "alta", "critica"];
 
 export async function GET(
   _request: Request,
@@ -24,6 +38,8 @@ export async function GET(
       assigneeUser: { select: { id: true, name: true } },
       group: { select: { id: true, name: true } },
       sector: { select: { id: true, name: true } },
+      tipoSolicitacao: { select: { id: true, nome: true } },
+      auxAssignees: { include: { user: { select: { id: true, name: true } } } },
       messages: {
         include: {
           user: { select: { id: true, name: true } },
@@ -49,7 +65,14 @@ export async function PATCH(
 
   const { id } = await context.params;
 
-  let body: { status?: string; subject?: string; content?: string };
+  let body: {
+    status?: string;
+    priority?: string;
+    subject?: string;
+    content?: string;
+    assigneeUserId?: string | null;
+    scheduledAt?: string | null;
+  };
   try {
     body = await request.json();
   } catch {
@@ -59,14 +82,72 @@ export async function PATCH(
   const canAccess = await canUserAccessTicket(userId, id);
   if (!canAccess) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
 
-  const ticket = await prisma.helpdeskTicket.findUnique({ where: { id }, select: { status: true, createdById: true } });
+  const role = (session.user as { role?: string })?.role;
+  const isAdmin = role === "admin";
+
+  const ticket = await prisma.helpdeskTicket.findUnique({
+    where: { id },
+    select: {
+      status: true,
+      createdById: true,
+      custoOrcamento: true,
+      assigneeType: true,
+      assigneeGroupId: true,
+      assigneeSectorId: true,
+    },
+  });
   if (!ticket) return NextResponse.json({ error: "Ticket não encontrado" }, { status: 404 });
 
-  const updateData: { status?: "open" | "in_progress" | "closed"; subject?: string | null } = {};
-  if (body.status && ["open", "in_progress", "closed"].includes(body.status)) {
-    updateData.status = body.status as "open" | "in_progress" | "closed";
+  if (body.status && body.status !== ticket.status) {
+    const newStatus = body.status as HelpdeskTicketStatus;
+    if (newStatus === "autorizado" || newStatus === "negado") {
+      if (ticket.status !== "custo_aguardando_aprovacao") {
+        return NextResponse.json({ error: "Só é possível autorizar/negado quando o chamado está com custo aguardando aprovação" }, { status: 400 });
+      }
+      if (!isAdmin) {
+        const profile = await getHelpdeskProfile(userId);
+        const managedGroupIds = await getManagedGroupIdsForUser(userId);
+        const managedSectorIds = await getManagedSectorIdsForUser(userId);
+        const inArea =
+          (ticket.assigneeType === "group" && ticket.assigneeGroupId && managedGroupIds.has(ticket.assigneeGroupId)) ||
+          (ticket.assigneeType === "sector" && ticket.assigneeSectorId && managedSectorIds.has(ticket.assigneeSectorId));
+        if (!profile?.isGerenteArea || !inArea) {
+          return NextResponse.json({ error: "Apenas gestor da área pode autorizar ou negar custo" }, { status: 403 });
+        }
+        const custo = ticket.custoOrcamento != null ? Number(ticket.custoOrcamento) : 0;
+        const maxAuth = profile.valorMaximoAutorizar != null ? Number(profile.valorMaximoAutorizar) : 0;
+        if (custo > maxAuth) {
+          return NextResponse.json({ error: "Valor do orçamento excede o valor máximo que você pode autorizar" }, { status: 403 });
+        }
+      }
+    } else if (newStatus === "reaberto") {
+      if (!["concluido", "closed"].includes(ticket.status)) {
+        return NextResponse.json({ error: "Só é possível reabrir chamados concluídos" }, { status: 400 });
+      }
+      if (!isAdmin && ticket.createdById !== userId) {
+        return NextResponse.json({ error: "Apenas o solicitante pode reabrir o chamado" }, { status: 403 });
+      }
+    }
+  }
+
+  const updateData: {
+    status?: HelpdeskTicketStatus;
+    priority?: HelpdeskTicketPriority | null;
+    subject?: string | null;
+    assigneeUserId?: string | null;
+    scheduledAt?: Date | null;
+  } = {};
+  if (body.status && VALID_STATUSES.includes(body.status as HelpdeskTicketStatus)) {
+    updateData.status = body.status as HelpdeskTicketStatus;
+  }
+  if (body.priority !== undefined) {
+    updateData.priority = VALID_PRIORITIES.includes(body.priority as HelpdeskTicketPriority)
+      ? (body.priority as HelpdeskTicketPriority)
+      : null;
   }
   if (body.subject !== undefined) updateData.subject = body.subject?.trim() || null;
+  if (body.assigneeUserId !== undefined) updateData.assigneeUserId = body.assigneeUserId || null;
+  if (body.scheduledAt !== undefined) updateData.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;
 
   if (body.content?.trim() && ticket.createdById === userId && ticket.status === "rejected") {
     await prisma.helpdeskMessage.create({
@@ -91,6 +172,8 @@ export async function PATCH(
       assigneeUser: { select: { id: true, name: true } },
       group: { select: { id: true, name: true } },
       sector: { select: { id: true, name: true } },
+      tipoSolicitacao: { select: { id: true, nome: true } },
+      auxAssignees: { include: { user: { select: { id: true, name: true } } } },
       messages: {
         include: { user: { select: { id: true, name: true } }, attachments: true },
         orderBy: { createdAt: "asc" },

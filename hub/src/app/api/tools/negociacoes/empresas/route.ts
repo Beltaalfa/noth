@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 import { getClientDbConnection } from "@/lib/db-connections";
 import { Pool } from "pg";
-import { getToolsForUser } from "@/lib/permissions";
+import { getClientIdsForNegociacoes } from "@/lib/permissions";
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -20,13 +20,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "clienteId obrigatório" }, { status: 400 });
   }
 
-  const role = (session.user as { role?: string })?.role;
-  if (role !== "admin") {
-    const tools = await getToolsForUser(userId);
-    const canAccess = tools.some((t) => t.slug === "negociacoes" && t.clientId === clienteId);
-    if (!canAccess) {
-      return NextResponse.json({ error: "Sem permissão para este cliente" }, { status: 403 });
-    }
+  const isAdmin = (session.user as { role?: string })?.role === "admin";
+  const allowedClientIds = await getClientIdsForNegociacoes(userId, isAdmin);
+  if (!allowedClientIds.includes(clienteId)) {
+    return NextResponse.json({ error: "Sem permissão para este cliente" }, { status: 403 });
   }
 
   try {

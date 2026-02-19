@@ -8,6 +8,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
+import { SearchInput } from "@/components/ui/SearchInput";
+import type { SortDirection } from "@/components/ui/Table";
 
 type Sector = { id: string; name: string; groupId: string; group: { name: string; client?: { name: string } } };
 
@@ -22,6 +24,36 @@ export default function SetoresPage() {
   const [editing, setEditing] = useState<Sector | null>(null);
   const [form, setForm] = useState({ name: "", groupId: "" });
   const [saving, setSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortKey, setSortKey] = useState("");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("default");
+
+  const handleSort = (key: string) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDirection("asc");
+      return;
+    }
+    setSortDirection((d) => (d === "default" ? "asc" : d === "asc" ? "desc" : "default"));
+    if (sortDirection === "desc") setSortKey("");
+  };
+
+  const filteredData = data.filter(
+    (r) =>
+      !searchTerm ||
+      String(r.name ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(r.group?.name ?? "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const sortedData =
+    sortDirection === "default" || !sortKey
+      ? filteredData
+      : [...filteredData].sort((a, b) => {
+          const va =
+            sortKey === "group" ? String(a.group?.name ?? "") : String((a as Record<string, unknown>)[sortKey] ?? "");
+          const vb =
+            sortKey === "group" ? String(b.group?.name ?? "") : String((b as Record<string, unknown>)[sortKey] ?? "");
+          return (sortDirection === "asc" ? 1 : -1) * va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
+        });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -80,11 +112,14 @@ export default function SetoresPage() {
           <IconPlus size={18} strokeWidth={2} /> Novo grupo
         </Button>
       </div>
+      <div className="mb-4">
+        <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por nome ou setor..." />
+      </div>
       {loading ? <p className="text-zinc-500">Carregando...</p> : (
         <Table<Sector>
           columns={[
-            { key: "group", header: "Setor", render: (r) => r.group?.name ?? "-" },
-            { key: "name", header: "Nome" },
+            { key: "group", header: "Setor", sortable: true, render: (r) => r.group?.name ?? "-" },
+            { key: "name", header: "Nome", sortable: true },
             { key: "actions", header: "Ações", render: (r) => (
               <div className="flex gap-2">
                 <button onClick={(e) => { e.stopPropagation(); openEdit(r); }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-zinc-800" title="Editar"><IconPencil size={18} strokeWidth={2} /></button>
@@ -92,9 +127,12 @@ export default function SetoresPage() {
               </div>
             ) },
           ]}
-          data={data}
+          data={sortedData}
           keyExtractor={(r) => r.id}
           emptyMessage="Nenhum grupo. Cadastre setores primeiro."
+          sortKey={sortKey || undefined}
+          sortDirection={sortDirection}
+          onSort={handleSort}
         />
       )}
       {total > 0 && (

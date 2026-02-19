@@ -16,6 +16,7 @@ export default async function RelatorioPage({
 
   const userId = (session.user as { id?: string })?.id;
   if (!userId) redirect("/login");
+  const isAdmin = (session.user as { role?: string })?.role === "admin";
 
   const { slug } = await params;
   const tool = await prisma.tool.findFirst({
@@ -25,7 +26,7 @@ export default async function RelatorioPage({
 
   if (!tool || !tool.powerbiUrl) notFound();
 
-  const canAccess = await canUserAccessReport(userId, tool.id);
+  const canAccess = await canUserAccessReport(userId, tool.id, isAdmin);
   if (!canAccess) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh]">

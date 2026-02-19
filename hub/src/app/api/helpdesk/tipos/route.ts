@@ -28,6 +28,7 @@ export async function GET(request: Request) {
   const rows = await prisma.helpdeskTipoSolicitacao.findMany({
     where: { clientId },
     include: {
+      parent: { select: { nome: true } },
       group: { select: { id: true, name: true } },
       sector: { select: { id: true, name: true } },
     },
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
   const result = rows.map((t) => ({
     id: t.id,
     nome: t.nome,
+    parent_nome: t.parent?.nome ?? null,
     group_id: t.groupId,
     group_nome: t.group?.name ?? null,
     sector_id: t.sectorId,

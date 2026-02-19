@@ -49,8 +49,24 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
+  helpdeskNivelAcesso    HelpdeskNivelAcesso? @default(solicitante)
+  primaryGroupId         String?
+  primaryGroup           Group?   @relation("UserPrimaryGroup", fields: [primaryGroupId], references: [id], onDelete: SetNull)
+  primarySectorId       String?
+  primarySector          Sector?  @relation("UserPrimarySector", fields: [primarySectorId], references: [id], onDelete: SetNull)
+  isGerenteArea          Boolean  @default(false)
+  podeReceberChamados    Boolean  @default(false)
+  podeEncaminharChamados Boolean  @default(false)
+  valorMaximoAutorizar   Decimal? @db.Decimal(15, 2)
+
+  // Liberações de funções: null = respeita o cliente; false = oculta para este usuário; true = libera (se o cliente tiver)
+  allowRelatorios     Boolean?
+  allowAjusteDespesa Boolean?
+  allowNegociacoes    Boolean?
+  allowHelpdesk       Boolean?
+
   userClientPermissions UserClientPermission[]
-  userGroupPermissions  UserGroupPermission[]
+  userGroupPermissions UserGroupPermission[]
   userSectorPermissions UserSectorPermission[]
   userToolPermissions   UserToolPermission[]
   auditLogs             AuditLog[]
@@ -60,8 +76,13 @@ model User {
   helpdeskNotifications HelpdeskNotification[]
   approvalConfigApprovers HelpdeskApprovalConfigApprover[]
   approvalLogs          HelpdeskApprovalLog[]
+  helpdeskTicketAuxAssignees HelpdeskTicketAuxAssignee[]
 
   @@index([deletedAt])
+  @@index([primaryGroupId])
+  @@index([primarySectorId])
+  @@index([isGerenteArea])
+  @@index([podeReceberChamados])
 }
 
 model Client {
@@ -72,6 +93,12 @@ model Client {
   deletedAt DateTime? // Soft delete
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  // Funcionalidades do menu lateral (para usuários com este cliente em Permissões)
+  relatoriosEnabled    Boolean @default(true)
+  ajusteDespesaEnabled Boolean @default(true)
+  negociacoesEnabled   Boolean @default(true)
+  helpdeskEnabled      Boolean @default(true)
 
   groups         Group[]
   dbConnections  DbConnection[]
@@ -139,6 +166,7 @@ model Group {
 
   sectors   Sector[]
   userPermissions UserGroupPermission[]
+  usersWithPrimaryGroup User[] @relation("UserPrimaryGroup")
   helpdeskTickets HelpdeskTicket[] @relation("TicketAssigneeGroup")
   helpdeskApprovalConfigs HelpdeskApprovalConfig[]
   helpdeskTipoSolicitacoes HelpdeskTipoSolicitacao[]
@@ -155,6 +183,7 @@ model Sector {
   updatedAt DateTime @updatedAt
 
   userPermissions UserSectorPermission[]
+  usersWithPrimarySector User[] @relation("UserPrimarySector")
   helpdeskTickets HelpdeskTicket[] @relation("TicketAssigneeSector")
   helpdeskApprovalConfigs HelpdeskApprovalConfig[]
   helpdeskTipoSolicitacoes HelpdeskTipoSolicitacao[]
@@ -291,6 +320,20 @@ model ClientTool {
 }
 
 // Helpdesk
+enum HelpdeskTicketPriority {
+  baixa
+  media
+  alta
+  critica
+}
+
+enum HelpdeskNivelAcesso {
+  solicitante
+  operador
+  gestor
+  admin
+}
+
 enum HelpdeskTicketStatus {
   open
   in_progress
@@ -300,6 +343,19 @@ enum HelpdeskTicketStatus {
   rejected
   approved
   cancelled
+  agendado_com_usuario
+  aguardando_atendimento
+  em_atendimento
+  aguardando_feedback_usuario
+  encaminhado_operador
+  indisponivel_atendimento
+  reaberto
+  retornado_usuario
+  custo_aguardando_aprovacao
+  autorizado
+  negado
+  atualizado
+  concluido
 }
 
 enum HelpdeskApprovalType {
@@ -320,12 +376,14 @@ enum HelpdeskAssigneeType {
 
 model HelpdeskTicket {
   id              String              @id @default(cuid())
+  numero          Int?                // Número sequencial por cliente (ex.: 1, 2, 3...)
   clientId        String
   client          Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
   tipoSolicitacaoId String?
   tipoSolicitacao HelpdeskTipoSolicitacao? @relation(fields: [tipoSolicitacaoId], references: [id], onDelete: SetNull)
   subject         String?
   status          HelpdeskTicketStatus @default(open)
+  priority        HelpdeskTicketPriority?
   assigneeType    HelpdeskAssigneeType
   assigneeUserId  String?
   assigneeUser    User?               @relation("TicketAssigneeUser", fields: [assigneeUserId], references: [id], onDelete: SetNull)
@@ -336,12 +394,15 @@ model HelpdeskTicket {
   createdById     String
   creator         User                @relation("TicketCreator", fields: [createdById], references: [id], onDelete: Cascade)
   slaLimitHours   Int?
+  scheduledAt     DateTime?
+  custoOrcamento  Decimal?            @db.Decimal(15, 2)
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  messages HelpdeskMessage[]
+  messages     HelpdeskMessage[]
   notifications HelpdeskNotification[]
-  approvalLogs   HelpdeskApprovalLog[]
+  approvalLogs  HelpdeskApprovalLog[]
+  auxAssignees  HelpdeskTicketAuxAssignee[]
 
   @@index([clientId])
   @@index([tipoSolicitacaoId])
@@ -351,6 +412,20 @@ model HelpdeskTicket {
   @@index([assigneeSectorId])
   @@index([status])
   @@index([createdAt])
+  @@index([priority])
+}
+
+model HelpdeskTicketAuxAssignee {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    HelpdeskTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([ticketId, userId])
+  @@index([ticketId])
+  @@index([userId])
 }
 
 model HelpdeskMessage {

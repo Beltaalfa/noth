@@ -26,25 +26,57 @@ export async function GET(request: Request) {
     const p = Math.max(1, Number(page) || 1);
     const l = Math.min(100, Math.max(1, Number(limit)) || 25);
     const skip = (p - 1) * l;
-    const [data, total] = await Promise.all([
+    const [data, total, clientCounts] = await Promise.all([
       prisma.user.findMany({
         where: { deletedAt: null },
         orderBy: { name: "asc" },
         skip,
         take: l,
-        select: { id: true, name: true, email: true, status: true, role: true, createdAt: true },
+        select: {
+          id: true, name: true, email: true, status: true, role: true, createdAt: true,
+          helpdeskNivelAcesso: true, primaryGroupId: true, primarySectorId: true,
+          isGerenteArea: true, podeReceberChamados: true, podeEncaminharChamados: true, valorMaximoAutorizar: true,
+        },
       }),
       prisma.user.count({ where: { deletedAt: null } }),
+      prisma.userClientPermission.groupBy({
+        by: ["userId"],
+        where: { user: { deletedAt: null } },
+        _count: true,
+      }),
     ]);
-    return NextResponse.json({ data, total });
+    const countMap = new Map(clientCounts.map((c) => [c.userId, c._count]));
+    const out = data.map((u) => ({
+      ...u,
+      valorMaximoAutorizar: u.valorMaximoAutorizar != null ? Number(u.valorMaximoAutorizar) : null,
+      clientCount: countMap.get(u.id) ?? 0,
+    }));
+    return NextResponse.json({ data: out, total });
   }
 
-  const usuarios = await prisma.user.findMany({
-    where: { deletedAt: null },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, email: true, status: true, role: true, createdAt: true },
-  });
-  return NextResponse.json(usuarios);
+  const [usuarios, clientCounts] = await Promise.all([
+    prisma.user.findMany({
+      where: { deletedAt: null },
+      orderBy: { name: "asc" },
+      select: {
+        id: true, name: true, email: true, status: true, role: true, createdAt: true,
+        helpdeskNivelAcesso: true, primaryGroupId: true, primarySectorId: true,
+        isGerenteArea: true, podeReceberChamados: true, podeEncaminharChamados: true, valorMaximoAutorizar: true,
+      },
+    }),
+    prisma.userClientPermission.groupBy({
+      by: ["userId"],
+      where: { user: { deletedAt: null } },
+      _count: true,
+    }),
+  ]);
+  const countMap = new Map(clientCounts.map((c) => [c.userId, c._count]));
+  const out = usuarios.map((u) => ({
+    ...u,
+    valorMaximoAutorizar: u.valorMaximoAutorizar != null ? Number(u.valorMaximoAutorizar) : null,
+    clientCount: countMap.get(u.id) ?? 0,
+  }));
+  return NextResponse.json(out);
 }
 
 export async function POST(request: Request) {

@@ -8,6 +8,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
+import { SearchInput } from "@/components/ui/SearchInput";
+import type { SortDirection } from "@/components/ui/Table";
 
 type Tool = {
   id: string;
@@ -178,6 +180,49 @@ export default function FerramentasPage() {
     dbConnectionId: "",
   });
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortKey, setSortKey] = useState("");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("default");
+
+  const handleSort = (key: string) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDirection("asc");
+      return;
+    }
+    setSortDirection((d) => (d === "default" ? "asc" : d === "asc" ? "desc" : "default"));
+    if (sortDirection === "desc") setSortKey("");
+  };
+
+  const filteredData = data.filter(
+    (r) =>
+      !searchTerm ||
+      [r.name, r.slug, r.client?.name].some((v) =>
+        String(v ?? "").toLowerCase().includes(searchTerm.toLowerCase())
+      )
+  );
+  const getSortVal = (r: Tool, k: string) =>
+    k === "client" ? String(r.client?.name ?? "") : String((r as Record<string, unknown>)[k] ?? "");
+  const sortedData =
+    sortDirection === "default" || !sortKey
+      ? filteredData
+      : [...filteredData].sort((a, b) => {
+          const va = getSortVal(a, sortKey);
+          const vb = getSortVal(b, sortKey);
+          return (sortDirection === "asc" ? 1 : -1) * va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
+        });
+
+  const syncClientTools = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/admin/tools/sync-client", { method: "POST" });
+      if (res.ok) {
+        const json = await res.json();
+        toast.success(`Vínculos sincronizados: ${json.synced ?? 0} ferramenta(s).`);
+      } else toast.error("Erro ao sincronizar");
+    } finally { setSyncing(false); }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -255,18 +300,29 @@ export default function FerramentasPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-zinc-100">Ferramentas</h1>
-        <Button onClick={openCreate} className="gap-2" disabled={clientes.length === 0}>
-          <IconPlus size={18} strokeWidth={2} /> Nova ferramenta
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={syncClientTools} disabled={syncing || total === 0}>
+            {syncing ? "Sincronizando…" : "Sincronizar vínculos com clientes"}
+          </Button>
+          <Button onClick={openCreate} className="gap-2" disabled={clientes.length === 0}>
+            <IconPlus size={18} strokeWidth={2} /> Nova ferramenta
+          </Button>
+        </div>
+      </div>
+      <p className="text-sm text-zinc-500 mb-4">
+        Ferramentas vinculadas ao cliente aparecem no menu do portal para usuários que têm esse cliente em Permissões (Admin → Usuários). Use &quot;Sincronizar vínculos&quot; se ferramentas antigas não aparecerem.
+      </p>
+      <div className="mb-4">
+        <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por nome, slug ou cliente..." />
       </div>
       {loading ? <p className="text-zinc-500">Carregando...</p> : (
         <Table<Tool>
           columns={[
-            { key: "name", header: "Nome" },
-            { key: "slug", header: "Slug" },
-            { key: "type", header: "Tipo" },
-            { key: "client", header: "Cliente", render: (r) => r.client?.name ?? "-" },
-            { key: "status", header: "Status", render: (r) => <span className={r.status === "active" ? "text-green-400" : "text-zinc-500"}>{r.status === "active" ? "Ativo" : "Inativo"}</span> },
+            { key: "name", header: "Nome", sortable: true },
+            { key: "slug", header: "Slug", sortable: true },
+            { key: "type", header: "Tipo", sortable: true },
+            { key: "client", header: "Cliente", sortable: true, render: (r) => r.client?.name ?? "-" },
+            { key: "status", header: "Status", sortable: true, render: (r) => <span className={r.status === "active" ? "text-green-400" : "text-zinc-500"}>{r.status === "active" ? "Ativo" : "Inativo"}</span> },
             {
               key: "actions",
               header: "Ações",
@@ -281,9 +337,12 @@ export default function FerramentasPage() {
               ),
             },
           ]}
-          data={data}
+          data={sortedData}
           keyExtractor={(r) => r.id}
           emptyMessage="Nenhuma ferramenta. Cadastre clientes primeiro."
+          sortKey={sortKey || undefined}
+          sortDirection={sortDirection}
+          onSort={handleSort}
         />
       )}
       {total > 0 && (

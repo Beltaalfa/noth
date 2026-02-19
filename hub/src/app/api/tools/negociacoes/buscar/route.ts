@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getClientDbConnection } from "@/lib/db-connections";
 import { logAudit } from "@/lib/audit";
 import { Pool } from "pg";
-import { getToolsForUser } from "@/lib/permissions";
+import { getClientIdsForNegociacoes } from "@/lib/permissions";
 
 type ModoBusca = "CNPJ" | "COD" | "NOME";
 
@@ -117,13 +117,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "busca obrigatória" }, { status: 400 });
   }
 
-  const role = (session.user as { role?: string })?.role;
-  if (role !== "admin") {
-    const tools = await getToolsForUser(userId);
-    const canAccess = tools.some((t) => t.slug === "negociacoes" && t.clientId === clienteId);
-    if (!canAccess) {
-      return NextResponse.json({ error: "Sem permissão para este cliente" }, { status: 403 });
-    }
+  const isAdmin = (session.user as { role?: string })?.role === "admin";
+  const allowedClientIds = await getClientIdsForNegociacoes(userId, isAdmin);
+  if (!allowedClientIds.includes(clienteId)) {
+    return NextResponse.json({ error: "Sem permissão para este cliente" }, { status: 403 });
   }
 
   const { modo, valorCnpj, valorCod, valorNome } = detectarModoBusca(String(busca).trim());

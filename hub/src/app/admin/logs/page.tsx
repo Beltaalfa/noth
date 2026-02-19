@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { Table } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
+import { SearchInput } from "@/components/ui/SearchInput";
+import type { SortDirection } from "@/components/ui/Table";
 
 type Log = {
   id: string;
@@ -20,6 +22,39 @@ export default function LogsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortKey, setSortKey] = useState("");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("default");
+
+  const handleSort = (key: string) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDirection("asc");
+      return;
+    }
+    setSortDirection((d) => (d === "default" ? "asc" : d === "asc" ? "desc" : "default"));
+    if (sortDirection === "desc") setSortKey("");
+  };
+
+  const filteredData = data.filter(
+    (r) =>
+      !searchTerm ||
+      [r.action, r.entity, r.details, r.user?.name, r.user?.email].some((v) =>
+        String(v ?? "").toLowerCase().includes(searchTerm.toLowerCase())
+      )
+  );
+  const getSortVal = (r: Log, k: string) => {
+    if (k === "user") return `${r.user?.name ?? ""} ${r.user?.email ?? ""}`;
+    return String((r as Record<string, unknown>)[k] ?? "");
+  };
+  const sortedData =
+    sortDirection === "default" || !sortKey
+      ? filteredData
+      : [...filteredData].sort((a, b) => {
+          const va = getSortVal(a, sortKey);
+          const vb = getSortVal(b, sortKey);
+          return (sortDirection === "asc" ? 1 : -1) * va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
+        });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -38,21 +73,27 @@ export default function LogsPage() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-zinc-100 mb-6">Logs / Auditoria</h1>
+      <div className="mb-4">
+        <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por ação, entidade, usuário, detalhes..." />
+      </div>
       {loading ? (
         <p className="text-zinc-500">Carregando...</p>
       ) : (
         <Table<Log>
           columns={[
-            { key: "createdAt", header: "Data", render: (r) => new Date(r.createdAt).toLocaleString("pt-BR") },
-            { key: "user", header: "Usuário", render: (r) => r.user ? `${r.user.name} (${r.user.email})` : "-" },
-            { key: "action", header: "Ação" },
-            { key: "entity", header: "Entidade" },
+            { key: "createdAt", header: "Data", sortable: true, render: (r) => new Date(r.createdAt).toLocaleString("pt-BR") },
+            { key: "user", header: "Usuário", sortable: true, render: (r) => r.user ? `${r.user.name} (${r.user.email})` : "-" },
+            { key: "action", header: "Ação", sortable: true },
+            { key: "entity", header: "Entidade", sortable: true },
             { key: "entityId", header: "ID", render: (r) => r.entityId ?? "-" },
-            { key: "details", header: "Detalhes", render: (r) => r.details ?? "-" },
+            { key: "details", header: "Detalhes", sortable: true, render: (r) => r.details ?? "-" },
           ]}
-          data={data}
+          data={sortedData}
           keyExtractor={(r) => r.id}
           emptyMessage="Nenhum log registrado."
+          sortKey={sortKey || undefined}
+          sortDirection={sortDirection}
+          onSort={handleSort}
         />
       )}
       {total > 0 && (

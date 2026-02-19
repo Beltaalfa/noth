@@ -1,15 +1,143 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { IconPlus, IconPencil, IconTrash, IconUpload } from "@tabler/icons-react";
+import { IconPlus, IconPencil, IconTrash, IconUpload, IconTools } from "@tabler/icons-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
+import { SearchInput } from "@/components/ui/SearchInput";
+import type { SortDirection } from "@/components/ui/Table";
 
-type Cliente = { id: string; name: string; logoUrl?: string | null; status: string };
+type Cliente = {
+  id: string;
+  name: string;
+  logoUrl?: string | null;
+  status: string;
+  relatoriosEnabled?: boolean;
+  ajusteDespesaEnabled?: boolean;
+  negociacoesEnabled?: boolean;
+  helpdeskEnabled?: boolean;
+};
+
+function FerramentasClienteModal({
+  client,
+  onClose,
+}: {
+  client: Cliente;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [menuFeatures, setMenuFeatures] = useState({
+    relatorios: true,
+    ajusteDespesa: true,
+    negociacoes: true,
+    helpdesk: true,
+  });
+  const [savingFeatures, setSavingFeatures] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    const clientRes = await fetch(`/api/admin/clientes/${client.id}`);
+    if (clientRes.ok) {
+      const c = (await clientRes.json()) as Cliente;
+      setMenuFeatures({
+        relatorios: c.relatoriosEnabled ?? true,
+        ajusteDespesa: c.ajusteDespesaEnabled ?? true,
+        negociacoes: c.negociacoesEnabled ?? true,
+        helpdesk: c.helpdeskEnabled ?? true,
+      });
+    }
+    setLoading(false);
+  }, [client.id]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchData();
+  }, [fetchData]);
+
+  const saveMenuFeatures = async () => {
+    setSavingFeatures(true);
+    try {
+      const res = await fetch(`/api/admin/clientes/${client.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          relatoriosEnabled: menuFeatures.relatorios,
+          ajusteDespesaEnabled: menuFeatures.ajusteDespesa,
+          negociacoesEnabled: menuFeatures.negociacoes,
+          helpdeskEnabled: menuFeatures.helpdesk,
+        }),
+      });
+      if (res.ok) toast.success("Funcionalidades salvas.");
+      else toast.error((await res.json()).error || "Erro ao salvar");
+    } finally {
+      setSavingFeatures(false);
+    }
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title={`Ferramentas - ${client.name}`} maxWidth="lg">
+      {loading ? (
+        <p className="text-zinc-500 py-4">Carregando...</p>
+      ) : (
+        <div className="space-y-5">
+          <div>
+            <h3 className="text-sm font-semibold text-zinc-300 border-b border-zinc-700 pb-2 mb-3">Funcionalidades do menu lateral</h3>
+            <p className="text-xs text-zinc-500 mb-3">
+              Marque quais itens do menu do portal os usuários com este cliente em Permissões podem ver.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={menuFeatures.relatorios}
+                  onChange={(e) => setMenuFeatures((f) => ({ ...f, relatorios: e.target.checked }))}
+                  className="rounded border-zinc-600 bg-zinc-800 text-amber-500"
+                />
+                Relatórios
+              </label>
+              <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={menuFeatures.ajusteDespesa}
+                  onChange={(e) => setMenuFeatures((f) => ({ ...f, ajusteDespesa: e.target.checked }))}
+                  className="rounded border-zinc-600 bg-zinc-800 text-amber-500"
+                />
+                Ajuste de Despesas
+              </label>
+              <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={menuFeatures.negociacoes}
+                  onChange={(e) => setMenuFeatures((f) => ({ ...f, negociacoes: e.target.checked }))}
+                  className="rounded border-zinc-600 bg-zinc-800 text-amber-500"
+                />
+                Negociações
+              </label>
+              <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={menuFeatures.helpdesk}
+                  onChange={(e) => setMenuFeatures((f) => ({ ...f, helpdesk: e.target.checked }))}
+                  className="rounded border-zinc-600 bg-zinc-800 text-amber-500"
+                />
+                Helpdesk
+              </label>
+            </div>
+            <Button type="button" onClick={saveMenuFeatures} isLoading={savingFeatures} className="mt-2">
+              Salvar funcionalidades
+            </Button>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button variant="secondary" onClick={onClose}>Fechar</Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
 
 export default function ClientesPage() {
   const [data, setData] = useState<Cliente[]>([]);
@@ -19,6 +147,33 @@ export default function ClientesPage() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Cliente | null>(null);
+  const [ferramentasModalCliente, setFerramentasModalCliente] = useState<Cliente | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortKey, setSortKey] = useState("");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("default");
+
+  const handleSort = (key: string) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDirection("asc");
+      return;
+    }
+    setSortDirection((d) => (d === "default" ? "asc" : d === "asc" ? "desc" : "default"));
+    if (sortDirection === "desc") setSortKey("");
+  };
+
+  const filteredData = data.filter(
+    (r) => !searchTerm || String(r.name ?? "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const sortedData =
+    sortDirection === "default" || !sortKey
+      ? filteredData
+      : [...filteredData].sort((a, b) => {
+          const va = String((a as Record<string, unknown>)[sortKey] ?? "");
+          const vb = String((b as Record<string, unknown>)[sortKey] ?? "");
+          return (sortDirection === "asc" ? 1 : -1) * va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
+        });
+
   const [form, setForm] = useState({ name: "", logoUrl: "", status: "active" as "active" | "inactive" });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -137,14 +292,16 @@ export default function ClientesPage() {
           Novo cliente
         </Button>
       </div>
-
+      <div className="mb-4">
+        <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por nome..." />
+      </div>
       {loading ? (
         <p className="text-zinc-500">Carregando...</p>
       ) : (
         <>
           <Table<Cliente>
             columns={[
-              { key: "name", header: "Nome" },
+              { key: "name", header: "Nome", sortable: true },
               {
                 key: "logoUrl",
                 header: "Logo",
@@ -158,6 +315,7 @@ export default function ClientesPage() {
               {
                 key: "status",
                 header: "Status",
+                sortable: true,
                 render: (r) => (
                   <span className={r.status === "active" ? "text-green-400" : "text-zinc-500"}>
                     {r.status === "active" ? "Ativo" : "Inativo"}
@@ -169,6 +327,13 @@ export default function ClientesPage() {
                 header: "Ações",
                 render: (r) => (
                   <div className="flex gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setFerramentasModalCliente(r); }}
+                      className="p-2 rounded-lg text-zinc-400 hover:text-amber-400 hover:bg-zinc-800"
+                      title="Ferramentas deste cliente"
+                    >
+                      <IconTools size={18} strokeWidth={2} />
+                    </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); openEdit(r); }}
                       className="p-2 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-zinc-800"
@@ -187,8 +352,11 @@ export default function ClientesPage() {
                 ),
               },
             ]}
-            data={data}
+            data={sortedData}
             keyExtractor={(r) => r.id}
+            sortKey={sortKey || undefined}
+            sortDirection={sortDirection}
+            onSort={handleSort}
           />
           {total > 0 && (
             <Pagination
@@ -254,6 +422,13 @@ export default function ClientesPage() {
           </div>
         </form>
       </Modal>
+
+      {ferramentasModalCliente && (
+        <FerramentasClienteModal
+          client={ferramentasModalCliente}
+          onClose={() => setFerramentasModalCliente(null)}
+        />
+      )}
     </div>
   );
 }

@@ -78,6 +78,14 @@ export async function POST(request: Request) {
       dbConnectionId: parsed.data.dbConnectionId ?? null,
     },
   });
+  // Libera a ferramenta para o cliente (usuários com acesso ao cliente veem no portal)
+  await prisma.clientTool.upsert({
+    where: {
+      clientId_toolId: { clientId: parsed.data.clientId, toolId: tool.id },
+    },
+    create: { clientId: parsed.data.clientId, toolId: tool.id },
+    update: {},
+  });
   await logAudit({
     userId: (session.user as { id?: string })?.id,
     action: "create",

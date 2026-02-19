@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { MinhasAprovacoesPanel } from "./MinhasAprovacoesPanel";
+import { EncaminharModal } from "./EncaminharModal";
 
 type Cliente = { id: string; name: string };
 type Ticket = {
@@ -69,7 +70,9 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
     subject: string | null;
     status: string;
     creator: { id: string };
+    clientId?: string;
   } | null>(null);
+  const [showEncaminhar, setShowEncaminhar] = useState(false);
   const [destinatarios, setDestinatarios] = useState<Destinatarios | null>(null);
   const [clientId, setClientId] = useState(clientes[0]?.id ?? "");
   const [assigneeType, setAssigneeType] = useState<"user" | "group" | "sector">("user");
@@ -87,8 +90,10 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
   const [showResubmit, setShowResubmit] = useState(false);
   const [resubmitSubject, setResubmitSubject] = useState("");
   const [resubmitContent, setResubmitContent] = useState("");
-  const [tiposSolicitacao, setTiposSolicitacao] = useState<{ id: string; nome: string; parent_nome: string | null }[]>([]);
+  type TipoSolicitacaoItem = { id: string; nome: string; parent_nome: string | null; group_id: string | null; sector_id: string | null };
+  const [tiposSolicitacaoAll, setTiposSolicitacaoAll] = useState<TipoSolicitacaoItem[]>([]);
   const [tipoSolicitacaoId, setTipoSolicitacaoId] = useState<string>("");
+  const [newTicketFiles, setNewTicketFiles] = useState<File[]>([]);
 
   const fetchTickets = useCallback(async () => {
     setLoading(true);
@@ -123,6 +128,7 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
         subject: data.subject,
         status: data.status,
         creator: { id: data.creator?.id ?? "" },
+        clientId: data.client?.id,
       });
       await fetch(`/api/helpdesk/notifications/read`, {
         method: "POST",
@@ -175,13 +181,63 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
     if (!clientId) return;
     const res = await fetch(`/api/helpdesk/tipos?clientId=${clientId}`);
     const data = await res.json();
-    if (res.ok) setTiposSolicitacao(Array.isArray(data) ? data.filter((t: { status?: string }) => t.status === "A") : []);
-    else setTiposSolicitacao([]);
+    if (res.ok && Array.isArray(data)) {
+      const ativos = data
+        .filter((t: { status?: string }) => t.status === "A")
+        .map((t: { id: string; nome: string; parent_nome?: string | null; group_id?: string | null; sector_id?: string | null }) => ({
+          id: t.id,
+          nome: t.nome,
+          parent_nome: t.parent_nome ?? null,
+          group_id: t.group_id ?? null,
+          sector_id: t.sector_id ?? null,
+        }));
+      setTiposSolicitacaoAll(ativos);
+    } else {
+      setTiposSolicitacaoAll([]);
+    }
   }, [clientId]);
 
   useEffect(() => {
     if (showNew && clientId) fetchTiposSolicitacao();
   }, [showNew, clientId, fetchTiposSolicitacao]);
+
+  const assigneeOptionsForFilter = destinatarios
+    ? [
+        ...(destinatarios.users ?? []).map((u: { id: string; name: string; groupIds?: string[]; sectorIds?: string[] }) => ({
+          id: u.id,
+          name: u.name,
+          type: "user" as const,
+          groupIds: u.groupIds ?? [],
+          sectorIds: u.sectorIds ?? [],
+        })),
+        ...(destinatarios.groups ?? []).map((g: { id: string; name: string }) => ({ id: g.id, name: g.name, type: "group" as const })),
+        ...(destinatarios.sectors ?? []).map((s: { id: string; name: string }) => ({ id: s.id, name: s.name, type: "sector" as const })),
+      ]
+    : [];
+
+  const selectedUserOption = assigneeType === "user" ? assigneeOptionsForFilter.find((o) => o.type === "user" && o.id === assigneeId) : null;
+  const userGroupIds = selectedUserOption && "groupIds" in selectedUserOption ? (selectedUserOption as { groupIds: string[] }).groupIds : [];
+  const userSectorIds = selectedUserOption && "sectorIds" in selectedUserOption ? (selectedUserOption as { sectorIds: string[] }).sectorIds : [];
+
+  const tiposSolicitacaoFiltered = (() => {
+    if (!assigneeId) return [];
+    if (assigneeType === "group") return tiposSolicitacaoAll.filter((t) => t.group_id === assigneeId);
+    if (assigneeType === "sector") return tiposSolicitacaoAll.filter((t) => t.sector_id === assigneeId);
+    if (assigneeType === "user")
+      return tiposSolicitacaoAll.filter(
+        (t) =>
+          (!t.group_id && !t.sector_id) ||
+          (t.group_id && userGroupIds.includes(t.group_id)) ||
+          (t.sector_id && userSectorIds.includes(t.sector_id))
+      );
+    return [];
+  })();
+
+  useEffect(() => {
+    if (!tipoSolicitacaoId) return;
+    const allowed = tiposSolicitacaoFiltered.some((t) => t.id === tipoSolicitacaoId);
+    if (!allowed) setTipoSolicitacaoId("");
+  }, [assigneeType, assigneeId, tipoSolicitacaoId, tiposSolicitacaoFiltered]);
 
   const handleCreate = async () => {
     if (!clientId || !assigneeId || !content.trim()) {
@@ -204,12 +260,29 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
       });
       const data = await res.json();
       if (res.ok) {
+        const ticketId = data.id as string;
+        const firstMessage = Array.isArray(data.messages) ? data.messages[0] : null;
+        const messageId = firstMessage?.id as string | undefined;
+        if (messageId && newTicketFiles.length > 0) {
+          for (const file of newTicketFiles) {
+            const formData = new FormData();
+            formData.append("ticketId", ticketId);
+            formData.append("messageId", messageId);
+            formData.append("file", file);
+            const upRes = await fetch("/api/helpdesk/upload", { method: "POST", body: formData });
+            if (!upRes.ok) {
+              const err = await upRes.json().catch(() => ({}));
+              toast.error(err.error ?? `Falha ao anexar ${file.name}`);
+            }
+          }
+        }
         toast.success("Ticket criado");
         setShowNew(false);
         setSubject("");
         setContent("");
         setAssigneeId("");
         setTipoSolicitacaoId("");
+        setNewTicketFiles([]);
         fetchTickets();
         fetchSummary();
       } else {
@@ -305,13 +378,7 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
     return Date.now() > limite;
   };
 
-  const assigneeOptions = destinatarios
-    ? [
-        ...destinatarios.users.map((u) => ({ id: u.id, name: u.name, type: "user" as const })),
-        ...destinatarios.groups.map((g) => ({ id: g.id, name: g.name, type: "group" as const })),
-        ...destinatarios.sectors.map((s) => ({ id: s.id, name: s.name, type: "sector" as const })),
-      ]
-    : [];
+  const assigneeOptions = assigneeOptionsForFilter;
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -440,7 +507,7 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
               </select>
             </div>
           </div>
-          {tiposSolicitacao.length > 0 && (
+          {tiposSolicitacaoFiltered.length > 0 && (
             <div>
               <label className="mb-1.5 block text-sm font-medium text-zinc-400">Tipo de Solicitação</label>
               <select
@@ -449,7 +516,7 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
                 className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
               >
                 <option value="">Nenhum</option>
-                {tiposSolicitacao.map((t) => (
+                {tiposSolicitacaoFiltered.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.parent_nome ? `${t.parent_nome} › ${t.nome}` : t.nome}
                   </option>
@@ -476,12 +543,30 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
               placeholder="Descreva aqui o seu chamado"
             />
           </div>
-          <div className="flex items-center gap-2 text-sm text-zinc-500">
-            <IconPaperclip size={16} />
-            <span>Anexar arquivos em breve</span>
+          <div>
+            <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-zinc-400">
+              <IconPaperclip size={16} />
+              Anexar documentos
+            </label>
+            <input
+              type="file"
+              multiple
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              className="mt-1 block w-full text-sm text-zinc-400 file:mr-2 file:rounded-lg file:border-0 file:bg-zinc-700 file:px-3 file:py-1.5 file:text-zinc-200 file:hover:bg-zinc-600"
+              onChange={(e) => setNewTicketFiles(Array.from(e.target.files ?? []))}
+            />
+            {newTicketFiles.length > 0 && (
+              <ul className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-500">
+                {newTicketFiles.map((f, i) => (
+                  <li key={i} className="rounded bg-zinc-800/50 px-2 py-1">
+                    {f.name} ({(f.size / 1024).toFixed(1)} KB)
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-zinc-700/50">
-            <Button variant="secondary" onClick={() => setShowNew(false)}>
+            <Button variant="secondary" onClick={() => { setShowNew(false); setNewTicketFiles([]); }}>
               Cancelar
             </Button>
             <Button onClick={handleCreate} disabled={loading}>
@@ -663,8 +748,16 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
                 ))}
               </div>
               <div className="border-t border-zinc-700/50 p-4">
-                {selectedTicket.status === "rejected" && userId === selectedTicket.creator.id && (
-                  <div className="mb-3">
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {selectedTicket.clientId && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => setShowEncaminhar(true)}
+                    >
+                      Agendar / Encaminhar
+                    </Button>
+                  )}
+                  {selectedTicket.status === "rejected" && userId === selectedTicket.creator.id && (
                     <Button
                       variant="secondary"
                       onClick={() => { setShowResubmit(true); setResubmitSubject(selectedTicket.subject ?? ""); setResubmitContent(""); }}
@@ -673,8 +766,8 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
                       <IconRefresh size={16} />
                       Editar e reenviar
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
                 <textarea
                   value={replyContent}
                   onChange={(e) => setReplyContent(e.target.value)}
@@ -698,6 +791,15 @@ export function HelpdeskPage({ clientes }: { clientes: Cliente[] }) {
           )}
         </div>
       </div>
+      )}
+
+      {showEncaminhar && selectedTicket?.clientId && (
+        <EncaminharModal
+          ticketId={selectedTicket.id}
+          clientId={selectedTicket.clientId}
+          onClose={() => setShowEncaminhar(false)}
+          onSuccess={() => { fetchTicket(selectedTicket.id); fetchTickets(); fetchSummary(); }}
+        />
       )}
     </div>
   );

@@ -8,6 +8,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
+import { SearchInput } from "@/components/ui/SearchInput";
+import type { SortDirection } from "@/components/ui/Table";
 
 type Group = { id: string; name: string; clientId: string; client: { name: string } };
 
@@ -22,6 +24,36 @@ export default function GruposPage() {
   const [editing, setEditing] = useState<Group | null>(null);
   const [form, setForm] = useState({ name: "", clientId: "" });
   const [saving, setSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortKey, setSortKey] = useState("");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("default");
+
+  const handleSort = (key: string) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDirection("asc");
+      return;
+    }
+    setSortDirection((d) => (d === "default" ? "asc" : d === "asc" ? "desc" : "default"));
+    if (sortDirection === "desc") setSortKey("");
+  };
+
+  const filteredData = data.filter(
+    (r) =>
+      !searchTerm ||
+      String(r.name ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(r.client?.name ?? "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const sortedData =
+    sortDirection === "default" || !sortKey
+      ? filteredData
+      : [...filteredData].sort((a, b) => {
+          const va =
+            sortKey === "client" ? String(a.client?.name ?? "") : String((a as Record<string, unknown>)[sortKey] ?? "");
+          const vb =
+            sortKey === "client" ? String(b.client?.name ?? "") : String((b as Record<string, unknown>)[sortKey] ?? "");
+          return (sortDirection === "asc" ? 1 : -1) * va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
+        });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -80,11 +112,14 @@ export default function GruposPage() {
           <IconPlus size={18} strokeWidth={2} /> Novo setor
         </Button>
       </div>
+      <div className="mb-4">
+        <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por nome ou cliente..." />
+      </div>
       {loading ? <p className="text-zinc-500">Carregando...</p> : (
         <Table<Group>
           columns={[
-            { key: "client", header: "Cliente", render: (r) => r.client?.name ?? "-" },
-            { key: "name", header: "Nome" },
+            { key: "client", header: "Cliente", sortable: true, render: (r) => r.client?.name ?? "-" },
+            { key: "name", header: "Nome", sortable: true },
             { key: "actions", header: "Ações", render: (r) => (
               <div className="flex gap-2">
                 <button onClick={(e) => { e.stopPropagation(); openEdit(r); }} className="p-2 rounded-lg text-zinc-400 hover:text-blue-400 hover:bg-zinc-800" title="Editar"><IconPencil size={18} strokeWidth={2} /></button>
@@ -92,9 +127,12 @@ export default function GruposPage() {
               </div>
             ) },
           ]}
-          data={data}
+          data={sortedData}
           keyExtractor={(r) => r.id}
           emptyMessage="Nenhum setor. Cadastre clientes primeiro."
+          sortKey={sortKey || undefined}
+          sortDirection={sortDirection}
+          onSort={handleSort}
         />
       )}
       {total > 0 && (

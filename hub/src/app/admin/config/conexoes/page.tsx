@@ -8,6 +8,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
+import { SearchInput } from "@/components/ui/SearchInput";
+import type { SortDirection } from "@/components/ui/Table";
 
 type Conexao = {
   id: string;
@@ -44,6 +46,37 @@ export default function ConexoesPage() {
     status: "active" as "active" | "inactive",
   });
   const [saving, setSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortKey, setSortKey] = useState("");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("default");
+
+  const handleSort = (key: string) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDirection("asc");
+      return;
+    }
+    setSortDirection((d) => (d === "default" ? "asc" : d === "asc" ? "desc" : "default"));
+    if (sortDirection === "desc") setSortKey("");
+  };
+
+  const filteredData = data.filter(
+    (r) =>
+      !searchTerm ||
+      [r.client?.name, r.host, r.database, r.user].some((v) =>
+        String(v ?? "").toLowerCase().includes(searchTerm.toLowerCase())
+      )
+  );
+  const getSortVal = (r: Conexao, k: string) =>
+    k === "client" ? String(r.client?.name ?? "") : String((r as Record<string, unknown>)[k] ?? "");
+  const sortedData =
+    sortDirection === "default" || !sortKey
+      ? filteredData
+      : [...filteredData].sort((a, b) => {
+          const va = getSortVal(a, sortKey);
+          const vb = getSortVal(b, sortKey);
+          return (sortDirection === "asc" ? 1 : -1) * va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
+        });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -169,15 +202,18 @@ export default function ConexoesPage() {
           <IconPlus size={18} strokeWidth={2} /> Nova conexão
         </Button>
       </div>
+      <div className="mb-4">
+        <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por cliente, host, database..." />
+      </div>
       {loading ? <p className="text-zinc-500">Carregando...</p> : (
         <Table<Conexao>
           columns={[
-            { key: "client", header: "Cliente", render: (r) => r.client?.name ?? "-" },
-            { key: "type", header: "Tipo", render: (r) => r.type === "postgres" ? "PostgreSQL" : "Firebird" },
-            { key: "host", header: "Host" },
-            { key: "port", header: "Porta" },
-            { key: "database", header: "Database" },
-            { key: "status", header: "Status", render: (r) => <span className={r.status === "active" ? "text-green-400" : "text-zinc-500"}>{r.status === "active" ? "Ativo" : "Inativo"}</span> },
+            { key: "client", header: "Cliente", sortable: true, render: (r) => r.client?.name ?? "-" },
+            { key: "type", header: "Tipo", sortable: true, render: (r) => r.type === "postgres" ? "PostgreSQL" : "Firebird" },
+            { key: "host", header: "Host", sortable: true },
+            { key: "port", header: "Porta", sortable: true },
+            { key: "database", header: "Database", sortable: true },
+            { key: "status", header: "Status", sortable: true, render: (r) => <span className={r.status === "active" ? "text-green-400" : "text-zinc-500"}>{r.status === "active" ? "Ativo" : "Inativo"}</span> },
             {
               key: "actions",
               header: "Ações",
@@ -190,9 +226,12 @@ export default function ConexoesPage() {
               ),
             },
           ]}
-          data={data}
+          data={sortedData}
           keyExtractor={(r) => r.id}
           emptyMessage="Nenhuma conexão. Cadastre clientes primeiro."
+          sortKey={sortKey || undefined}
+          sortDirection={sortDirection}
+          onSort={handleSort}
         />
       )}
       {total > 0 && (

@@ -46,7 +46,16 @@ export type ReportForUser = {
   client: { name: string; logoUrl: string | null };
 };
 
-export async function getReportsForUser(userId: string): Promise<ReportForUser[]> {
+/** Relatórios acessíveis: apenas dos clientes/grupos/setores do cadastro do usuário (mesma lógica do Helpdesk). */
+export async function getReportsForUser(
+  userId: string,
+  isAdmin?: boolean
+): Promise<ReportForUser[]> {
+  const isAdminRole = isAdmin === true;
+  const clientIdsRelatorios = await getClientIdsForRelatorios(userId, isAdminRole);
+  if (clientIdsRelatorios.length === 0) return [];
+
+  const clientIdSet = new Set(clientIdsRelatorios);
   const [groupPerms, sectorPerms] = await Promise.all([
     prisma.userGroupPermission.findMany({ where: { userId }, select: { groupId: true } }),
     prisma.userSectorPermission.findMany({ where: { userId }, select: { sectorId: true } }),
@@ -56,7 +65,7 @@ export async function getReportsForUser(userId: string): Promise<ReportForUser[]
 
   const toolPerms = await prisma.toolPermission.findMany({
     where: {
-      tool: { type: "powerbi_report", status: "active" },
+      tool: { type: "powerbi_report", status: "active", clientId: { in: clientIdsRelatorios } },
       OR: [
         { principalType: "user", principalId: userId },
         ...(groupIds.length ? [{ principalType: "group" as const, principalId: { in: groupIds } }] : []),
@@ -70,7 +79,7 @@ export async function getReportsForUser(userId: string): Promise<ReportForUser[]
   const reports: ReportForUser[] = [];
   for (const tp of toolPerms) {
     const t = tp.tool;
-    if (t && t.client && !seen.has(t.id)) {
+    if (t && t.client && clientIdSet.has(t.clientId) && !seen.has(t.id)) {
       seen.add(t.id);
       reports.push({
         id: t.id,
@@ -81,11 +90,37 @@ export async function getReportsForUser(userId: string): Promise<ReportForUser[]
       });
     }
   }
+
+  const toolsFromClients = await prisma.tool.findMany({
+    where: {
+      type: "powerbi_report",
+      status: "active",
+      clientId: { in: clientIdsRelatorios },
+    },
+    include: { client: { select: { name: true, logoUrl: true } } },
+  });
+  for (const t of toolsFromClients) {
+    if (t.client && !seen.has(t.id)) {
+      seen.add(t.id);
+      reports.push({
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        clientId: t.clientId,
+        client: { name: t.client.name, logoUrl: t.client.logoUrl },
+      });
+    }
+  }
+
   return reports;
 }
 
-export async function canUserAccessReport(userId: string, toolId: string): Promise<boolean> {
-  const reports = await getReportsForUser(userId);
+export async function canUserAccessReport(
+  userId: string,
+  toolId: string,
+  isAdmin?: boolean
+): Promise<boolean> {
+  const reports = await getReportsForUser(userId, isAdmin);
   return reports.some((r) => r.id === toolId);
 }
 
@@ -99,6 +134,142 @@ export async function getClientsForUser(userId: string): Promise<{ id: string; n
     orderBy: { name: "asc" },
   });
   return clients;
+}
+
+/** Para o helpdesk: admin vê todos os clientes; demais usuários só os que têm permissão. */
+export async function getClientsForHelpdesk(
+  userId: string,
+  isAdmin: boolean
+): Promise<{ id: string; name: string }[]> {
+  if (isAdmin) {
+    const all = await prisma.client.findMany({
+      where: { deletedAt: null, status: "active" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+    return all;
+  }
+  return getClientsForUser(userId);
+}
+
+/** Funcionalidades do menu lateral por cliente (checkboxes em Admin → Clientes → Ferramentas). */
+export type ClientMenuFeatures = {
+  relatorios: boolean;
+  ajusteDespesa: boolean;
+  negociacoes: boolean;
+  helpdesk: boolean;
+};
+
+export async function getClientMenuFeatures(
+  userId: string,
+  isAdmin: boolean
+): Promise<ClientMenuFeatures> {
+  const clients = await getClientsForHelpdesk(userId, isAdmin);
+  if (clients.length === 0) {
+    return { relatorios: false, ajusteDespesa: false, negociacoes: false, helpdesk: false };
+  }
+  const clientIds = clients.map((c) => c.id);
+  const rows = await prisma.client.findMany({
+    where: { id: { in: clientIds }, deletedAt: null, status: "active" },
+    select: {
+      relatoriosEnabled: true,
+      ajusteDespesaEnabled: true,
+      negociacoesEnabled: true,
+      helpdeskEnabled: true,
+    },
+  });
+  return {
+    relatorios: rows.some((r) => r.relatoriosEnabled),
+    ajusteDespesa: rows.some((r) => r.ajusteDespesaEnabled),
+    negociacoes: rows.some((r) => r.negociacoesEnabled),
+    helpdesk: rows.some((r) => r.helpdeskEnabled),
+  };
+}
+
+/** Liberações de funções do usuário (null = respeita o cliente; false = oculta; true = libera). */
+export type UserMenuOverrides = {
+  allowRelatorios: boolean | null;
+  allowAjusteDespesa: boolean | null;
+  allowNegociacoes: boolean | null;
+  allowHelpdesk: boolean | null;
+};
+
+export async function getUserMenuOverrides(userId: string): Promise<UserMenuOverrides> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      allowRelatorios: true,
+      allowAjusteDespesa: true,
+      allowNegociacoes: true,
+      allowHelpdesk: true,
+    },
+  });
+  if (!user) {
+    return { allowRelatorios: null, allowAjusteDespesa: null, allowNegociacoes: null, allowHelpdesk: null };
+  }
+  return {
+    allowRelatorios: user.allowRelatorios ?? null,
+    allowAjusteDespesa: user.allowAjusteDespesa ?? null,
+    allowNegociacoes: user.allowNegociacoes ?? null,
+    allowHelpdesk: user.allowHelpdesk ?? null,
+  };
+}
+
+/** Clientes para os quais o usuário pode acessar Relatórios. Admin: todos com relatoriosEnabled. Não-admin: apenas clientes com vínculo direto (UserClientPermission) e relatoriosEnabled. */
+export async function getClientIdsForRelatorios(
+  userId: string,
+  isAdmin: boolean
+): Promise<string[]> {
+  const overrides = await getUserMenuOverrides(userId);
+  if (overrides.allowRelatorios === false) return [];
+
+  if (isAdmin) {
+    const rows = await prisma.client.findMany({
+      where: { deletedAt: null, status: "active", relatoriosEnabled: true },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
+  }
+
+  const directClientIds = await prisma.userClientPermission
+    .findMany({ where: { userId }, select: { clientId: true } })
+    .then((rows) => rows.map((r) => r.clientId));
+  if (directClientIds.length === 0) return [];
+
+  const rows = await prisma.client.findMany({
+    where: {
+      id: { in: directClientIds },
+      deletedAt: null,
+      status: "active",
+      relatoriosEnabled: true,
+    },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+/** Clientes para os quais o usuário pode acessar Negociações (checkboxes: cliente.negociacoesEnabled + user.allowNegociacoes). Admin retorna todos com negociacoesEnabled. */
+export async function getClientIdsForNegociacoes(
+  userId: string,
+  isAdmin: boolean
+): Promise<string[]> {
+  const overrides = await getUserMenuOverrides(userId);
+  if (overrides.allowNegociacoes === false) return [];
+
+  const clients = await getClientsForHelpdesk(userId, isAdmin);
+  if (clients.length === 0) return [];
+
+  const clientIds = clients.map((c) => c.id);
+  const rows = await prisma.client.findMany({
+    where: {
+      id: { in: clientIds },
+      deletedAt: null,
+      status: "active",
+      negociacoesEnabled: true,
+    },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
 }
 
 export type AlteracaoDespesaTool = {

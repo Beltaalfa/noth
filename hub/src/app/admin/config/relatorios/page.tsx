@@ -8,6 +8,8 @@ import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
 import { Table } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
+import { SearchInput } from "@/components/ui/SearchInput";
+import type { SortDirection } from "@/components/ui/Table";
 
 type Report = {
   id: string;
@@ -193,6 +195,38 @@ export default function RelatoriosPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [permModalTool, setPermModalTool] = useState<Report | null>(null);
   const [editing, setEditing] = useState<Report | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortKey, setSortKey] = useState("");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("default");
+
+  const handleSort = (key: string) => {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDirection("asc");
+      return;
+    }
+    setSortDirection((d) => (d === "default" ? "asc" : d === "asc" ? "desc" : "default"));
+    if (sortDirection === "desc") setSortKey("");
+  };
+
+  const filteredData = data.filter(
+    (r) =>
+      !searchTerm ||
+      [r.name, r.slug, r.client?.name].some((v) =>
+        String(v ?? "").toLowerCase().includes(searchTerm.toLowerCase())
+      )
+  );
+  const getSortVal = (r: Report, k: string) =>
+    k === "client" ? String(r.client?.name ?? "") : String((r as Record<string, unknown>)[k] ?? "");
+  const sortedData =
+    sortDirection === "default" || !sortKey
+      ? filteredData
+      : [...filteredData].sort((a, b) => {
+          const va = getSortVal(a, sortKey);
+          const vb = getSortVal(b, sortKey);
+          return (sortDirection === "asc" ? 1 : -1) * va.localeCompare(vb, "pt-BR", { sensitivity: "base" });
+        });
+
   const [form, setForm] = useState({
     clientId: "",
     name: "",
@@ -298,17 +332,21 @@ export default function RelatoriosPage() {
           <IconPlus size={18} strokeWidth={2} /> Novo relatório
         </Button>
       </div>
+      <div className="mb-4">
+        <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Buscar por nome, slug ou cliente..." />
+      </div>
       {loading ? (
         <p className="text-zinc-500">Carregando...</p>
       ) : (
         <Table<Report>
           columns={[
-            { key: "name", header: "Nome" },
-            { key: "slug", header: "Slug" },
-            { key: "client", header: "Cliente", render: (r) => r.client?.name ?? "-" },
+            { key: "name", header: "Nome", sortable: true },
+            { key: "slug", header: "Slug", sortable: true },
+            { key: "client", header: "Cliente", sortable: true, render: (r) => r.client?.name ?? "-" },
             {
               key: "status",
               header: "Status",
+              sortable: true,
               render: (r) => (
                 <span className={r.status === "active" ? "text-green-400" : "text-zinc-500"}>
                   {r.status === "active" ? "Ativo" : "Inativo"}
@@ -345,9 +383,12 @@ export default function RelatoriosPage() {
               ),
             },
           ]}
-          data={data}
+          data={sortedData}
           keyExtractor={(r) => r.id}
           emptyMessage="Nenhum relatório. Cadastre clientes primeiro e clique em Novo relatório."
+          sortKey={sortKey || undefined}
+          sortDirection={sortDirection}
+          onSort={handleSort}
         />
       )}
       {total > 0 && (

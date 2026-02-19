@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { canUserAccessTicket } from "@/lib/helpdesk";
 
 const MAX_SIZE = 20 * 1024 * 1024; // 20MB
-const ALLOWED_TYPES = /^(image|audio|video|application)\//;
+const ALLOWED_TYPES = /^(image|audio|video|application|text)\//;
 
 export async function POST(request: Request) {
   const session = await auth();

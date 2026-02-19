@@ -29,8 +29,15 @@ export async function POST(
     data: { ticketId, userId, content: content.trim() },
     include: { user: { select: { id: true, name: true } }, attachments: true },
   });
-  await prisma.helpdeskTicket.update({ where: { id: ticketId }, data: { status: "in_progress", updatedAt: new Date() } });
-  const ticket = await prisma.helpdeskTicket.findUnique({ where: { id: ticketId }, select: { assigneeType: true, assigneeUserId: true, assigneeGroupId: true, assigneeSectorId: true } });
+  const ticketForStatus = await prisma.helpdeskTicket.findUnique({
+    where: { id: ticketId },
+    select: { createdById: true, assigneeType: true, assigneeUserId: true, assigneeGroupId: true, assigneeSectorId: true },
+  });
+  const newStatus = ticketForStatus?.createdById && ticketForStatus.createdById !== userId
+    ? "aguardando_feedback_usuario"
+    : "in_progress";
+  await prisma.helpdeskTicket.update({ where: { id: ticketId }, data: { status: newStatus, updatedAt: new Date() } });
+  const ticket = ticketForStatus;
   if (ticket) {
     const userIdsToNotify = new Set<string>();
     if (ticket.assigneeType === "user" && ticket.assigneeUserId && ticket.assigneeUserId !== userId) userIdsToNotify.add(ticket.assigneeUserId);

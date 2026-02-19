@@ -8,7 +8,27 @@ const updateSchema = z.object({
   name: z.string().min(1).optional(),
   logoUrl: z.string().optional().nullable(),
   status: z.enum(["active", "inactive"]).optional(),
+  relatoriosEnabled: z.boolean().optional(),
+  ajusteDespesaEnabled: z.boolean().optional(),
+  negociacoesEnabled: z.boolean().optional(),
+  helpdeskEnabled: z.boolean().optional(),
 });
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session || (session.user as { role?: string })?.role !== "admin") {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+  const { id } = await params;
+  const client = await prisma.client.findFirst({
+    where: { id, deletedAt: null },
+  });
+  if (!client) return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404 });
+  return NextResponse.json(client);
+}
 
 export async function PATCH(
   request: Request,
