@@ -22,7 +22,7 @@ export function PortalLayoutClient({
   if (isHelpdesk) {
     return (
       <div className="min-h-screen flex flex-col">
-        <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-4 lg:px-8 gap-4">
+        <header className="h-14 shrink-0 border-b border-zinc-800 flex items-center justify-between px-3 sm:px-4 lg:px-8 gap-3">
           <div className="flex items-center gap-4">
             <Link
               href="/dashboard"
@@ -39,7 +39,7 @@ export function PortalLayoutClient({
             Sair
           </Button>
         </header>
-        <main className="flex-1 p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-auto">{children}</main>
       </div>
     );
   }

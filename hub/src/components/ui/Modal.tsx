@@ -40,9 +40,9 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "md" }: Mod
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm min-h-full"
         onClick={onClose}
         aria-hidden
       />
@@ -51,14 +51,15 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "md" }: Mod
         aria-modal="true"
         aria-labelledby={title ? "modal-title" : undefined}
         className={`
-          relative w-full ${maxWidthClasses[maxWidth]}
+          relative w-full my-auto max-h-[calc(100vh-1.5rem)] overflow-y-auto
+          ${maxWidthClasses[maxWidth]}
           bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl
           transition-all duration-200
         `}
         onClick={(e) => e.stopPropagation()}
       >
         {title ? (
-          <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+          <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-zinc-800">
             <h2 id="modal-title" className="text-lg font-semibold text-zinc-100">
               {title}
             </h2>
@@ -79,7 +80,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidth = "md" }: Mod
             <IconX size={20} strokeWidth={2} />
           </button>
         )}
-        <div className="px-6 py-4">{children}</div>
+        <div className="px-4 sm:px-6 py-4">{children}</div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { IconX } from "@tabler/icons-react";
 
 export interface SidebarItem {
   href: string;
@@ -15,18 +16,50 @@ interface SidebarProps {
   title?: string;
   logo?: ReactNode;
   footer?: ReactNode;
+  /** No mobile: controla se o drawer está aberto */
+  mobileOpen?: boolean;
+  /** No mobile: chamado ao fechar (clique fora ou botão) */
+  onClose?: () => void;
 }
 
-export function Sidebar({ items, title = "Hub", logo, footer }: SidebarProps) {
+export function Sidebar({ items, title = "Hub", logo, footer, mobileOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 flex flex-col border-r border-zinc-800 bg-black">
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-zinc-800 px-6">
-        {logo || (
-          <span className="text-lg font-semibold text-zinc-100">{title}</span>
-        )}
-      </div>
+    <>
+      {/* Overlay no mobile ao abrir o menu */}
+      {mobileOpen && (
+        <button
+          type="button"
+          onClick={onClose}
+          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+          aria-label="Fechar menu"
+        />
+      )}
+      <aside
+        className={`
+          fixed left-0 top-0 z-40 h-screen w-64 max-w-[85vw] flex flex-col border-r border-zinc-800 bg-black
+          transition-transform duration-200 ease-out
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+        `}
+      >
+        <div className="flex h-14 lg:h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 px-4 lg:px-6">
+          <div className="flex items-center gap-2 min-w-0">
+            {logo || (
+              <span className="text-lg font-semibold text-zinc-100 truncate">{title}</span>
+            )}
+          </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 lg:hidden"
+              aria-label="Fechar menu"
+            >
+              <IconX size={22} strokeWidth={2} />
+            </button>
+          )}
+        </div>
       <nav className="flex-1 overflow-y-auto p-4">
         <ul className="space-y-0.5">
           {items.map((item) => {
@@ -60,6 +93,7 @@ export function Sidebar({ items, title = "Hub", logo, footer }: SidebarProps) {
           {footer}
         </div>
       ) : null}
-    </aside>
+      </aside>
+    </>
   );
 }
