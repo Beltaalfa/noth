@@ -25,11 +25,11 @@ export default async function NegociacoesPage() {
   }
 
   const clients = await prisma.client.findMany({
-    where: { id: { in: clientIds }, deletedAt: null, status: "active" },
-    select: { id: true, name: true },
+    where: { id: { in: clientIds }, deletedAt: null },
+    select: { id: true, name: true, status: true },
     orderBy: { name: "asc" },
   });
-  const clientes = clients.map((c) => ({ id: c.id, name: c.name }));
+  const clientes = clients.map((c) => ({ id: c.id, name: c.name, status: c.status }));
 
   return <NegociacoesForm clientes={clientes} />;
 }

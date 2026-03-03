@@ -14,13 +14,33 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://hub.nortempresarial.com.br";
+
 export const metadata: Metadata = {
   title: "Hub - Nortempresarial",
   description: "Portal do Cliente e Painel Admin",
   manifest: "/manifest.json",
   icons: {
-    icon: [{ url: "/logo.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/logo.svg", type: "image/svg+xml" }],
+    icon: [
+      { url: "/icon-dark.png", type: "image/png", media: "(prefers-color-scheme: dark)" },
+      { url: "/icon-light.png", type: "image/png", media: "(prefers-color-scheme: light)" },
+      { url: "/icon-dark.png", type: "image/png", sizes: "32x32" },
+    ],
+    apple: [{ url: "/icon-dark.png", type: "image/png" }],
+  },
+  openGraph: {
+    title: "Hub - Nortempresarial",
+    description: "Portal do Cliente e Painel Admin",
+    url: baseUrl,
+    siteName: "Hub Nortempresarial",
+    images: [{ url: "/icon-dark.png", width: 512, height: 512, alt: "North" }],
+    locale: "pt_BR",
+  },
+  twitter: {
+    card: "summary",
+    title: "Hub - Nortempresarial",
+    description: "Portal do Cliente e Painel Admin",
+    images: [`${baseUrl}/icon-dark.png`],
   },
   appleWebApp: {
     capable: true,

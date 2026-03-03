@@ -44,7 +44,7 @@ export function LayoutWithSidebar({
         }
       />
       <main className="flex-1 min-h-screen flex flex-col lg:ml-64 w-full min-w-0">
-        <header className="h-14 lg:h-16 border-b border-zinc-800 shrink-0 flex items-center gap-3 px-4 lg:px-6">
+        <header className="h-14 lg:h-16 shrink-0 flex items-center gap-3 px-4 lg:px-6">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}

@@ -86,6 +86,7 @@ WHERE na.rn = 1
      OR ($2 = 'COD'    AND na.cod_pessoa = $4)
      OR ($2 = 'NOME'   AND b.nom_pessoa ILIKE $5)
   )
+  AND ($6::int IS NULL OR na.cod_item = $6)
 ORDER BY c.des_item, na.cod_condicao_pagamento, na.dta_inicio DESC
 `;
 
@@ -99,14 +100,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
   }
 
-  let body: { clienteId?: string; codEmpresa?: number; busca?: string };
+  let body: { clienteId?: string; codEmpresa?: number; busca?: string; codItem?: number | string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  const { clienteId, codEmpresa, busca } = body;
+  const { clienteId, codEmpresa, busca, codItem } = body;
   if (!clienteId) {
     return NextResponse.json({ error: "clienteId obrigatório" }, { status: 400 });
   }
@@ -125,6 +126,7 @@ export async function POST(request: Request) {
 
   const { modo, valorCnpj, valorCod, valorNome } = detectarModoBusca(String(busca).trim());
   const codEmp = Number(codEmpresa);
+  const codItemNum = codItem != null && codItem !== "" ? Number(codItem) : null;
 
   const params = [
     codEmp,
@@ -132,6 +134,7 @@ export async function POST(request: Request) {
     valorCnpj ?? "",
     valorCod ?? 0,
     valorNome ?? "%%",
+    codItemNum ?? null,
   ];
 
   try {

@@ -130,7 +130,7 @@ export function AlteracaoDespesaForm() {
   };
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="max-w-2xl space-y-6">
       <header className="border-b border-zinc-700/50 pb-4">
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
           Ajuste de Despesas
@@ -151,46 +151,53 @@ export function AlteracaoDespesaForm() {
       ) : (
         <div className="space-y-6">
           {/* Despesas */}
-          <section className="rounded-xl border border-zinc-700/50 bg-zinc-900/30 p-5">
+          <section className="rounded-xl border border-zinc-700/50 bg-zinc-900/30 p-4 sm:p-5">
             <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-400">
               Despesas
             </h2>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-zinc-300">
-                Sequência
-              </label>
+            <div className="max-w-xl">
+              <label className="mb-1.5 block text-xs font-medium text-zinc-400">Sequência</label>
               <input
                 type="text"
                 value={seqInput}
                 onChange={handleSeqInput}
                 placeholder="Ex: 1, 2, 3 ou 1,2,3"
-                className="w-full max-w-md px-3 py-2 rounded-lg border border-zinc-600/80 bg-zinc-800/50 text-zinc-100 text-sm transition-colors placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500/50"
+                className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500/50"
               />
               <p className="mt-1.5 text-xs text-zinc-500">Apenas números e vírgulas</p>
             </div>
           </section>
 
           {/* Alterações a aplicar */}
-          <section className="rounded-xl border border-zinc-700/50 bg-zinc-900/30 p-5">
-            <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-zinc-400">
+          <section className="rounded-xl border border-zinc-700/50 bg-zinc-900/30 p-4 sm:p-5">
+            <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-400">
               Alterações a aplicar
             </h2>
             <p className="mb-4 text-xs text-zinc-500">
               Marque os campos que deseja alterar e preencha os valores
             </p>
             <div className="space-y-4">
-              <div className="flex items-center gap-4 rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-4">
-                <input
-                  type="checkbox"
-                  id="cb-centro"
-                  checked={alterarCentro}
-                  onChange={(e) => setAlterarCentro(e.target.checked)}
-                  className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-zinc-100 focus:ring-2 focus:ring-zinc-500 focus:ring-offset-0 focus:ring-offset-zinc-900"
-                />
-                <div className="flex-1 min-w-0">
-                  <label htmlFor="cb-centro" className="block text-sm font-medium text-zinc-300 mb-1.5">
-                    Centro de custo (rateio)
-                  </label>
+              <div className="flex flex-wrap items-center gap-4 rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-4">
+                <label className="flex cursor-pointer items-center gap-3 shrink-0" htmlFor="cb-centro">
+                  <input
+                    type="checkbox"
+                    id="cb-centro"
+                    checked={alterarCentro}
+                    onChange={(e) => setAlterarCentro(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                      alterarCentro ? "border-blue-500 bg-blue-600 text-white" : "border-zinc-600 bg-zinc-800"
+                    }`}
+                    aria-hidden
+                  >
+                    {alterarCentro && <IconCheck size={14} strokeWidth={2.5} />}
+                  </span>
+                  <span className="text-sm font-medium text-zinc-300">Centro de custo (rateio)</span>
+                </label>
+                <div className="min-w-[200px] flex-1">
+                  <span className="mb-1.5 block text-xs font-medium text-zinc-400">Selecione o centro de custo</span>
                   <select
                     value={codCentroCusto}
                     onChange={(e) => setCodCentroCusto(e.target.value)}
@@ -207,18 +214,27 @@ export function AlteracaoDespesaForm() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-4">
-                <input
-                  type="checkbox"
-                  id="cb-tipo"
-                  checked={alterarTipo}
-                  onChange={(e) => setAlterarTipo(e.target.checked)}
-                  className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-zinc-100 focus:ring-2 focus:ring-zinc-500 focus:ring-offset-0 focus:ring-offset-zinc-900"
-                />
-                <div className="flex-1 min-w-0">
-                  <label htmlFor="cb-tipo" className="block text-sm font-medium text-zinc-300 mb-1.5">
-                    Tipo de despesa
-                  </label>
+              <div className="flex flex-wrap items-center gap-4 rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-4">
+                <label className="flex cursor-pointer items-center gap-3 shrink-0" htmlFor="cb-tipo">
+                  <input
+                    type="checkbox"
+                    id="cb-tipo"
+                    checked={alterarTipo}
+                    onChange={(e) => setAlterarTipo(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                      alterarTipo ? "border-blue-500 bg-blue-600 text-white" : "border-zinc-600 bg-zinc-800"
+                    }`}
+                    aria-hidden
+                  >
+                    {alterarTipo && <IconCheck size={14} strokeWidth={2.5} />}
+                  </span>
+                  <span className="text-sm font-medium text-zinc-300">Tipo de despesa</span>
+                </label>
+                <div className="min-w-[200px] flex-1">
+                  <span className="mb-1.5 block text-xs font-medium text-zinc-400">Selecione o tipo</span>
                   <select
                     value={codTipoDespesa}
                     onChange={(e) => setCodTipoDespesa(e.target.value)}
@@ -235,18 +251,27 @@ export function AlteracaoDespesaForm() {
                 </div>
               </div>
 
-              <div className="flex items-start gap-4 rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-4">
-                <input
-                  type="checkbox"
-                  id="cb-obs"
-                  checked={alterarObservacao}
-                  onChange={(e) => setAlterarObservacao(e.target.checked)}
-                  className="mt-1.5 h-4 w-4 shrink-0 rounded border-zinc-600 bg-zinc-800 text-zinc-100 focus:ring-2 focus:ring-zinc-500 focus:ring-offset-0 focus:ring-offset-zinc-900"
-                />
-                <div className="flex-1 min-w-0">
-                  <label htmlFor="cb-obs" className="block text-sm font-medium text-zinc-300 mb-1.5">
-                    Observação
-                  </label>
+              <div className="flex flex-wrap items-start gap-4 rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-4">
+                <label className="flex cursor-pointer items-start gap-3 shrink-0 pt-0.5" htmlFor="cb-obs">
+                  <input
+                    type="checkbox"
+                    id="cb-obs"
+                    checked={alterarObservacao}
+                    onChange={(e) => setAlterarObservacao(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors ${
+                      alterarObservacao ? "border-blue-500 bg-blue-600 text-white" : "border-zinc-600 bg-zinc-800"
+                    }`}
+                    aria-hidden
+                  >
+                    {alterarObservacao && <IconCheck size={14} strokeWidth={2.5} />}
+                  </span>
+                  <span className="text-sm font-medium text-zinc-300">Observação</span>
+                </label>
+                <div className="min-w-[200px] flex-1">
+                  <span className="mb-1.5 block text-xs font-medium text-zinc-400">Texto livre</span>
                   <textarea
                     value={observacao}
                     onChange={(e) => setObservacao(e.target.value)}

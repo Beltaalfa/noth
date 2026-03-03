@@ -48,19 +48,16 @@ function LoginForm() {
     <div className="min-h-screen flex items-center justify-center bg-black px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-2 min-h-[48px] items-center">
+          <div className="flex justify-center">
             <Image
-              src="/logo.svg"
-              alt="Hub Nortempresarial"
-              width={140}
-              height={48}
-              className="h-12 w-auto object-contain [color:white]"
+              src="/logo-north-branco.png"
+              alt="North - Nortempresarial"
+              width={480}
+              height={150}
+              className="h-32 sm:h-40 w-auto max-w-full object-contain"
+              priority
             />
-            <span className="text-2xl font-bold text-zinc-100" style={{ display: "none" }}>
-              Hub
-            </span>
           </div>
-          <p className="text-zinc-500 mt-1">Nortempresarial</p>
         </div>
 
         <form
@@ -106,10 +103,6 @@ function LoginForm() {
             Entrar
           </Button>
         </form>
-
-        <p className="text-center text-zinc-500 text-sm mt-6">
-          Portal do Cliente e Painel Admin
-        </p>
       </div>
     </div>
   );

@@ -43,7 +43,7 @@ export function Sidebar({ items, title = "Hub", logo, footer, mobileOpen = false
           ${mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
-        <div className="flex h-14 lg:h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 px-4 lg:px-6">
+        <div className="flex h-14 lg:h-16 shrink-0 items-center justify-between gap-2 px-4 lg:px-6">
           <div className="flex items-center gap-2 min-w-0">
             {logo || (
               <span className="text-lg font-semibold text-zinc-100 truncate">{title}</span>
@@ -89,7 +89,7 @@ export function Sidebar({ items, title = "Hub", logo, footer, mobileOpen = false
         </ul>
       </nav>
       {footer ? (
-        <div className="shrink-0 border-t border-zinc-800 p-4">
+        <div className="shrink-0 p-4">
           {footer}
         </div>
       ) : null}
