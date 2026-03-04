@@ -19,6 +19,9 @@ import {
   formDataCadastroDescontoSchema,
 } from "@/lib/schemas/helpdesk";
 import { checkRateLimit, getRateLimitKey } from "@/lib/rateLimit";
+import { getNivelCurvaABCPorCodPessoa } from "@/lib/curva-abc";
+
+const NOME_SETOR_ANALISE_CREDITO = "Análise de Crédito";
 
 const includeList = {
   creator: { select: { id: true, name: true } },
@@ -136,7 +139,37 @@ export async function GET(request: Request) {
     orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
     take: 100,
   });
-  return NextResponse.json(tickets);
+
+  type FormData = Record<string, unknown> | null;
+  const pairs = tickets
+    .filter((t) => {
+      const fd = (t.formData as FormData) ?? null;
+      const cod = fd?.cadastroCodPessoa;
+      return !!t.clientId && typeof cod === "number";
+    })
+    .map((t) => ({
+      clientId: t.clientId!,
+      codPessoa: (t.formData as FormData)!.cadastroCodPessoa as number,
+    }));
+  const uniqueKeys = [...new Set(pairs.map((p) => `${p.clientId}:${p.codPessoa}`))];
+  const nivelMap = new Map<string, string | null>();
+  await Promise.all(
+    uniqueKeys.map(async (key) => {
+      const [clientId, codStr] = key.split(":");
+      const nivel = await getNivelCurvaABCPorCodPessoa(clientId, Number(codStr));
+      nivelMap.set(key, nivel);
+    })
+  );
+
+  const enriched = tickets.map((t) => {
+    const fd = (t.formData as FormData) ?? null;
+    const cod = fd?.cadastroCodPessoa;
+    const key =
+      t.clientId && typeof cod === "number" ? `${t.clientId}:${cod}` : null;
+    const nivelCurvaAbc = key ? nivelMap.get(key) ?? null : null;
+    return { ...t, nivelCurvaAbc };
+  });
+  return NextResponse.json(enriched);
 }
 
 export async function POST(request: Request) {
@@ -161,17 +194,19 @@ export async function POST(request: Request) {
     const msg = parsed.error.issues.map((e) => e.message).join("; ") || "Dados inválidos";
     return NextResponse.json({ error: msg, details: parsed.error.flatten() }, { status: 400 });
   }
-  const { clientId, subject, assigneeType, assigneeId, content, tipoSolicitacaoId, formData, custoOrcamento } = parsed.data;
+  let { clientId, subject, assigneeType, assigneeId, content, tipoSolicitacaoId, formData, custoOrcamento } = parsed.data;
 
   let workflowStep: string | null = null;
   let formDataToSave: Record<string, unknown> | null = null;
   let custoOrcamentoToSave: number | null = null;
 
+  let slaLimitHoursFromTipo: number | null = null;
   if (tipoSolicitacaoId) {
     const tipo = await prisma.helpdeskTipoSolicitacao.findUnique({
       where: { id: tipoSolicitacaoId },
-      select: { nome: true },
+      select: { nome: true, slaLimitHours: true },
     });
+    if (tipo?.slaLimitHours != null) slaLimitHoursFromTipo = tipo.slaLimitHours;
     if (tipo?.nome === TIPO_CADASTRO_DESCONTO_COMERCIAL) {
       workflowStep = "credito";
       const formParsed = formDataCadastroDescontoSchema.safeParse(formData ?? {});
@@ -184,9 +219,25 @@ export async function POST(request: Request) {
       }
       formDataToSave = formParsed.data as unknown as Record<string, unknown>;
       custoOrcamentoToSave = Number(custoOrcamento);
+
+      const setorCredito = await prisma.sector.findFirst({
+        where: { name: NOME_SETOR_ANALISE_CREDITO, group: { clientId } },
+        select: { id: true },
+      });
+      if (!setorCredito) {
+        return NextResponse.json(
+          { error: "Configure o setor 'Análise de Crédito' no cliente para utilizar este tipo de solicitação." },
+          { status: 400 }
+        );
+      }
+      assigneeType = "sector";
+      assigneeId = setorCredito.id;
     }
   }
 
+  if (!assigneeId) {
+    return NextResponse.json({ error: "Destinatário é obrigatório" }, { status: 400 });
+  }
   const canCreate = await canUserCreateTicketFor(userId, clientId, assigneeType, assigneeId);
   const role = (session.user as { role?: string })?.role;
   if (!canCreate && role !== "admin") {
@@ -231,6 +282,7 @@ export async function POST(request: Request) {
       assigneeSectorId: assigneeType === "sector" ? assigneeId : null,
       createdById: userId,
       workflowStep,
+      slaLimitHours: slaLimitHoursFromTipo ?? undefined,
       formData: (formDataToSave ?? undefined) as Prisma.InputJsonValue | undefined,
       custoOrcamento: custoOrcamentoToSave ?? undefined,
       messages: {

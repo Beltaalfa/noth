@@ -6,3 +6,6 @@ out/
 .env.local
 north-site.pid
 backup/
+backups/
+hub.bak.*/
+hub.env.backup

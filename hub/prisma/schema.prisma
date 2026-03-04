@@ -142,6 +142,8 @@ model HelpdeskTipoSolicitacao {
   sector    Sector?  @relation(fields: [sectorId], references: [id], onDelete: SetNull)
   status    String   @default("A") // A=Ativo, I=Inativo
   ordem     Int      @default(0)
+  slaLimitHours   Int?  // Tempo limite de atendimento em horas (ex.: 8, 24)
+  slaWarnHoursBefore Int?  // Horas antes do limite para avisar o atendente (ex.: 1, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

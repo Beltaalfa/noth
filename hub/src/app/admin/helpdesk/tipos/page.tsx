@@ -14,6 +14,8 @@ type Tipo = {
   sector_id: string | null;
   sector_nome: string | null;
   status: string;
+  sla_limit_hours?: number | null;
+  sla_warn_hours_before?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -31,11 +33,13 @@ export default function TiposSolicitacaoPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Tipo | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<{ nome: string; groupId: string; sectorId: string; status: string }>({
+  const [form, setForm] = useState<{ nome: string; groupId: string; sectorId: string; status: string; slaLimitHours: string; slaWarnHoursBefore: string }>({
     nome: "",
     groupId: "",
     sectorId: "",
     status: "A",
+    slaLimitHours: "",
+    slaWarnHoursBefore: "",
   });
 
   const fetchClientes = useCallback(async () => {
@@ -99,7 +103,7 @@ export default function TiposSolicitacaoPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ nome: "", groupId: "", sectorId: "", status: "A" });
+    setForm({ nome: "", groupId: "", sectorId: "", status: "A", slaLimitHours: "", slaWarnHoursBefore: "" });
     setModalOpen(true);
   };
 
@@ -110,6 +114,8 @@ export default function TiposSolicitacaoPage() {
       groupId: t.group_id ?? "",
       sectorId: t.sector_id ?? "",
       status: t.status ?? "A",
+      slaLimitHours: t.sla_limit_hours != null ? String(t.sla_limit_hours) : "",
+      slaWarnHoursBefore: t.sla_warn_hours_before != null ? String(t.sla_warn_hours_before) : "",
     });
     setModalOpen(true);
   };
@@ -126,12 +132,16 @@ export default function TiposSolicitacaoPage() {
     }
     setSaving(true);
     try {
+      const slaLimitHoursNum = form.slaLimitHours.trim() ? parseInt(form.slaLimitHours, 10) : null;
+      const slaWarnHoursNum = form.slaWarnHoursBefore.trim() ? parseInt(form.slaWarnHoursBefore, 10) : null;
       const payload = {
         clientId,
         nome: form.nome.trim(),
         groupId: form.groupId || null,
         sectorId: form.sectorId || null,
         status: form.status,
+        slaLimitHours: slaLimitHoursNum != null && !Number.isNaN(slaLimitHoursNum) && slaLimitHoursNum > 0 ? slaLimitHoursNum : null,
+        slaWarnHoursBefore: slaWarnHoursNum != null && !Number.isNaN(slaWarnHoursNum) && slaWarnHoursNum >= 0 ? slaWarnHoursNum : null,
       };
       if (editing) {
         const res = await fetch(`/api/helpdesk/tipos/${editing.id}`, {
@@ -300,6 +310,28 @@ export default function TiposSolicitacaoPage() {
               <option value="A">Ativo</option>
               <option value="I">Inativo</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-1">SLA (horas)</label>
+            <input
+              type="number"
+              min={1}
+              value={form.slaLimitHours}
+              onChange={(e) => setForm((f) => ({ ...f, slaLimitHours: e.target.value }))}
+              className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+              placeholder="Ex: 24"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-zinc-400 mb-1">Avisar atendente (horas antes)</label>
+            <input
+              type="number"
+              min={0}
+              value={form.slaWarnHoursBefore}
+              onChange={(e) => setForm((f) => ({ ...f, slaWarnHoursBefore: e.target.value }))}
+              className="w-full rounded-lg border border-zinc-600/80 bg-zinc-800/50 px-3 py-2 text-sm text-zinc-100"
+              placeholder="Ex: 2"
+            />
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-zinc-700/50">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>Cancelar</Button>

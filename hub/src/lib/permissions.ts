@@ -272,6 +272,14 @@ export async function getClientIdsForNegociacoes(
   return rows.map((r) => r.id);
 }
 
+/** Clientes para os quais o usuário pode acessar o relatório Curva ABC (mesma regra que Negociações). */
+export async function getClientIdsForCurvaABC(
+  userId: string,
+  isAdmin: boolean
+): Promise<string[]> {
+  return getClientIdsForNegociacoes(userId, isAdmin);
+}
+
 export type AlteracaoDespesaTool = {
   id: string;
   clientId: string;

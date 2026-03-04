@@ -67,6 +67,7 @@ export function HelpdeskNav() {
     { href: `${base}/filas`, label: "Filas de Chamados", show: !!perfil.podeVerFilas, icon: <IconList size={18} /> },
     { href: `${base}/areas-geridas`, label: "Áreas Geridas", show: !!perfil.podeVerAreasGeridas, icon: <IconChartBar size={18} /> },
     { href: `${base}/arvore`, label: "Árvore de Chamados", show: !!perfil.podeVerArvore, icon: <IconBinaryTree size={18} /> },
+    { href: `${base}/preview-cadastro-desconto`, label: "Preview formulário", show: true, icon: <IconTicket size={18} /> },
   ].filter((l) => l.show);
 
   return (
@@ -122,7 +123,15 @@ export function HelpdeskNav() {
                       >
                         <p className="text-sm text-zinc-200 truncate">{n.ticket?.subject || "Novo chamado"}</p>
                         <p className="text-xs text-zinc-500 mt-0.5">
-                          {n.type === "new_ticket" ? "Novo chamado" : n.type === "awaiting_approval" ? "Aguardando aprovação" : "Atualização"}
+                          {n.type === "new_ticket"
+                            ? "Novo chamado"
+                            : n.type === "awaiting_approval"
+                              ? "Aguardando aprovação"
+                              : n.type === "sla_breached"
+                                ? "SLA estourado"
+                                : n.type === "sla_near_breach"
+                                  ? "SLA próximo do limite"
+                                  : "Atualização"}
                         </p>
                       </Link>
                     ))

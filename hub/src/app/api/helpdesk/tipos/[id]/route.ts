@@ -17,13 +17,13 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   const userId = (session.user as { id?: string })?.id;
   if (!userId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
   const { id } = await context.params;
-  let body: { clientId: string; nome?: string; groupId?: string | null; sectorId?: string | null; status?: string };
+  let body: { clientId: string; nome?: string; groupId?: string | null; sectorId?: string | null; status?: string; slaLimitHours?: number | null; slaWarnHoursBefore?: number | null };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
-  const { clientId, nome, groupId, sectorId, status } = body;
+  const { clientId, nome, groupId, sectorId, status, slaLimitHours, slaWarnHoursBefore } = body;
   if (!clientId) return NextResponse.json({ error: "clientId obrigatório" }, { status: 400 });
   if (status !== undefined && status !== "A" && status !== "I") return NextResponse.json({ error: "status deve ser A ou I" }, { status: 400 });
 
@@ -45,7 +45,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     if (group.clientId !== clientId) return NextResponse.json({ error: "Setor não pertence ao cliente" }, { status: 400 });
   }
 
-  const data: { nome?: string; groupId?: string | null; sectorId?: string | null; status?: string } = {};
+  const data: { nome?: string; groupId?: string | null; sectorId?: string | null; status?: string; slaLimitHours?: number | null; slaWarnHoursBefore?: number | null } = {};
   if (nome !== undefined) {
     if (!nome.trim()) return NextResponse.json({ error: "Nome não pode ser vazio" }, { status: 400 });
     data.nome = nome.trim();
@@ -53,6 +53,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   if (groupId !== undefined) data.groupId = groupId || null;
   if (sectorId !== undefined) data.sectorId = sectorId || null;
   if (status !== undefined) data.status = status;
+  if (slaLimitHours !== undefined) data.slaLimitHours = slaLimitHours != null && Number.isInteger(slaLimitHours) && slaLimitHours > 0 ? slaLimitHours : null;
+  if (slaWarnHoursBefore !== undefined) data.slaWarnHoursBefore = slaWarnHoursBefore != null && Number.isInteger(slaWarnHoursBefore) && slaWarnHoursBefore >= 0 ? slaWarnHoursBefore : null;
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({
@@ -61,6 +63,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       group_id: existing.groupId,
       sector_id: existing.sectorId,
       status: existing.status,
+      sla_limit_hours: existing.slaLimitHours,
+      sla_warn_hours_before: existing.slaWarnHoursBefore,
       created_at: existing.createdAt,
       updated_at: existing.updatedAt,
     });
@@ -79,6 +83,8 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     group_id: updated.groupId,
     sector_id: updated.sectorId,
     status: updated.status,
+    sla_limit_hours: updated.slaLimitHours,
+    sla_warn_hours_before: updated.slaWarnHoursBefore,
     created_at: updated.createdAt,
     updated_at: updated.updatedAt,
   });

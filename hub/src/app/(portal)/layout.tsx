@@ -36,7 +36,8 @@ export default async function PortalLayout({
       : []),
     ...(allow(menuFeatures.helpdesk, userOverrides.allowHelpdesk) && clients.length > 0 ? [{ href: "/helpdesk", label: "Helpdesk", icon: <IconMessageCircle /> }] : []),
     ...(allow(menuFeatures.negociacoes, userOverrides.allowNegociacoes) ? [{ href: "/ferramentas/negociacoes", label: "Negociações", icon: <IconTools /> }] : []),
-    ...tools.filter((t) => t.slug !== "negociacoes").map((t) => ({
+    ...(allow(menuFeatures.negociacoes, userOverrides.allowNegociacoes) ? [{ href: "/ferramentas/curva-abc", label: "Curva ABC", icon: <IconTools /> }] : []),
+    ...tools.filter((t) => t.slug !== "negociacoes" && t.slug !== "curva-abc").map((t) => ({
       href: `/ferramentas/${t.slug}`,
       label: t.name,
       icon: <IconTools />,

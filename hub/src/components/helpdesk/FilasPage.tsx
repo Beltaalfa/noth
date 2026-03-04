@@ -15,6 +15,7 @@ type Ticket = {
   priority?: string | null;
   creator: { id: string; name: string };
   client: { id: string; name: string };
+  nivelCurvaAbc?: string | null;
   assigneeUser?: {
     id: string;
     name: string;
@@ -247,6 +248,9 @@ export function FilasPage() {
                     <tr key={`${t.id}-exp`} className="border-b border-zinc-700/30 bg-zinc-800/20">
                       <td colSpan={8} className="px-4 py-3">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-zinc-500">Cliente:</span> {t.client.name}
+                          </div>
                           <div>
                             <span className="text-zinc-500">Prioridade:</span>{" "}
                             {t.priority ? PRIORITY_LABEL[t.priority] : "—"}

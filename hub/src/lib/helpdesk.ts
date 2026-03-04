@@ -62,6 +62,23 @@ export async function getManagedSectorIdsForUser(userId: string): Promise<Set<st
   return new Set();
 }
 
+/** User IDs dos gestores do setor (Sector): isGerenteArea e primarySectorId === sectorId ou primaryGroupId === sector.groupId. */
+export async function getManagerUserIdsForSector(sectorId: string): Promise<string[]> {
+  const sector = await prisma.sector.findUnique({
+    where: { id: sectorId },
+    select: { groupId: true },
+  });
+  if (!sector) return [];
+  const users = await prisma.user.findMany({
+    where: {
+      isGerenteArea: true,
+      OR: [{ primarySectorId: sectorId }, { primaryGroupId: sector.groupId }],
+    },
+    select: { id: true },
+  });
+  return users.map((u) => u.id);
+}
+
 /** Para filas: group/sector IDs onde o operador atua (primary ou permissões). */
 export async function getQueueGroupIdsForUser(userId: string): Promise<Set<string>> {
   const [profile, groupPerms] = await Promise.all([

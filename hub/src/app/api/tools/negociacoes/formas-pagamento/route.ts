@@ -4,7 +4,6 @@ import { getClientDbConnection } from "@/lib/db-connections";
 import { Pool } from "pg";
 import { getClientIdsForNegociacoes } from "@/lib/permissions";
 
-/** Lista itens combustível (cod_subgrupo_item = 1). Mesma base do painel: tab_item. */
 export async function GET(request: Request) {
   const session = await auth();
   if (!session) {
@@ -16,38 +15,40 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const clienteId = searchParams.get("clienteId") ?? searchParams.get("clientId");
-  if (!clienteId) {
-    return NextResponse.json({ error: "clienteId ou clientId obrigatório" }, { status: 400 });
+  const clientId = searchParams.get("clientId") ?? searchParams.get("clienteId");
+  if (!clientId) {
+    return NextResponse.json({ error: "clientId obrigatório" }, { status: 400 });
   }
 
   const isAdmin = (session.user as { role?: string })?.role === "admin";
   const allowedClientIds = await getClientIdsForNegociacoes(userId, isAdmin);
-  if (!allowedClientIds.includes(clienteId)) {
+  if (!allowedClientIds.includes(clientId)) {
     return NextResponse.json({ error: "Sem permissão para este cliente" }, { status: 403 });
   }
 
   try {
-    const creds = await getClientDbConnection(clienteId, "negociacoes");
+    const creds = await getClientDbConnection(clientId, "negociacoes");
     const pool = new Pool({
       ...creds,
       connectionTimeoutMillis: 10000,
     });
     const client = await pool.connect();
     const result = await client.query(
-      "SELECT a.cod_item, a.des_item FROM tab_item a WHERE a.cod_subgrupo_item = 1 ORDER BY a.des_item"
+      `SELECT cod_forma_pagto, des_forma_pagto
+       FROM tab_forma_pagto_pdv
+       ORDER BY des_forma_pagto`
     );
     client.release();
     await pool.end();
 
     return NextResponse.json(
       result.rows.map((r) => ({
-        cod_item: Number(r.cod_item),
-        des_item: String(r.des_item ?? ""),
+        cod_forma_pagto: Number(r.cod_forma_pagto),
+        des_forma_pagto: String(r.des_forma_pagto ?? ""),
       }))
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Erro ao listar produtos";
+    const message = err instanceof Error ? err.message : "Erro ao listar formas de pagamento";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

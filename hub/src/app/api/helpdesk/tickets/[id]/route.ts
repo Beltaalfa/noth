@@ -9,6 +9,7 @@ import {
   getManagedSectorIdsForUser,
 } from "@/lib/helpdesk";
 import { patchTicketBodySchema } from "@/lib/schemas/helpdesk";
+import { getNivelCurvaABCPorCodPessoa } from "@/lib/curva-abc";
 
 const VALID_STATUSES: HelpdeskTicketStatus[] = [
   "open", "in_progress", "closed", "pending_approval", "in_approval", "rejected", "approved", "cancelled",
@@ -52,7 +53,14 @@ export async function GET(
   });
 
   if (!ticket) return NextResponse.json({ error: "Ticket não encontrado" }, { status: 404 });
-  return NextResponse.json(ticket);
+
+  const fd = ticket.formData as Record<string, unknown> | null;
+  const codPessoa = fd?.cadastroCodPessoa;
+  let nivelCurvaAbc: string | null = null;
+  if (ticket.clientId && typeof codPessoa === "number") {
+    nivelCurvaAbc = await getNivelCurvaABCPorCodPessoa(ticket.clientId, codPessoa);
+  }
+  return NextResponse.json({ ...ticket, nivelCurvaAbc });
 }
 
 export async function PATCH(
@@ -180,5 +188,11 @@ export async function PATCH(
       },
     },
   });
-  return NextResponse.json(result);
+  const fd = result?.formData as Record<string, unknown> | null;
+  const codPessoa = fd?.cadastroCodPessoa;
+  let nivelCurvaAbc: string | null = null;
+  if (result?.clientId && typeof codPessoa === "number") {
+    nivelCurvaAbc = await getNivelCurvaABCPorCodPessoa(result.clientId, codPessoa);
+  }
+  return NextResponse.json(result ? { ...result, nivelCurvaAbc } : result);
 }

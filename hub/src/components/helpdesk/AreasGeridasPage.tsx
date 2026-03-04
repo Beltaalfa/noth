@@ -20,6 +20,7 @@ type Ticket = {
   status: string;
   creator: { name: string };
   client: { name: string };
+  nivelCurvaAbc?: string | null;
   group?: { name: string } | null;
   sector?: { name: string } | null;
   tipoSolicitacao?: { nome: string } | null;

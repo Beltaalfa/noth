@@ -226,7 +226,7 @@ function ProprietariosClienteModal({
       ) : (
         <div className="space-y-5">
           <p className="text-xs text-zinc-500">
-            Proprietários do cliente podem aprovar chamados de tipo &quot;Cadastro e aprovação de desconto comercial&quot; quando o valor do desconto for maior que 20 centavos (são necessárias 2 aprovações de proprietários).
+            Os proprietários aqui listados podem ser usados em fluxos de aprovação que exijam múltiplos aprovadores (ex.: outros tipos de solicitação). O tipo &quot;Cadastro e aprovação de desconto comercial&quot; segue o fluxo Análise de Crédito → Gerência Comercial → Diretoria, conforme valor do desconto.
           </p>
           <div>
             <h3 className="text-sm font-semibold text-zinc-300 border-b border-zinc-700 pb-2 mb-3">Proprietários vinculados</h3>

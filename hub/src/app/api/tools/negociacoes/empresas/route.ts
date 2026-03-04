@@ -4,6 +4,7 @@ import { getClientDbConnection } from "@/lib/db-connections";
 import { Pool } from "pg";
 import { getClientIdsForNegociacoes } from "@/lib/permissions";
 
+/** Lista empresas (postos). Mesma query do painel de negociações: tab_empresa. */
 export async function GET(request: Request) {
   const session = await auth();
   if (!session) {
@@ -15,9 +16,9 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const clienteId = searchParams.get("clienteId");
+  const clienteId = searchParams.get("clienteId") ?? searchParams.get("clientId");
   if (!clienteId) {
-    return NextResponse.json({ error: "clienteId obrigatório" }, { status: 400 });
+    return NextResponse.json({ error: "clienteId ou clientId obrigatório" }, { status: 400 });
   }
 
   const isAdmin = (session.user as { role?: string })?.role === "admin";
@@ -34,9 +35,7 @@ export async function GET(request: Request) {
     });
     const client = await pool.connect();
     const result = await client.query(
-      `SELECT a.cod_empresa, a.nom_fantasia
-       FROM tab_empresa a
-       ORDER BY a.nom_fantasia`
+      "SELECT a.cod_empresa, a.nom_fantasia FROM tab_empresa a ORDER BY a.nom_fantasia"
     );
     client.release();
     await pool.end();

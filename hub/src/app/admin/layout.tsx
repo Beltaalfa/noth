@@ -34,6 +34,7 @@ export default async function AdminLayout({
     { href: "/admin/config/conexoes", label: "Conexões de Banco", icon: <IconDatabase /> },
     { href: "/admin/alteracao-despesa", label: "Ajuste de Despesas", icon: <IconTools /> },
     { href: "/admin/negociacoes", label: "Negociações", icon: <IconTools /> },
+    { href: "/ferramentas/curva-abc", label: "Relatório Curva ABC", icon: <IconChartBar /> },
     { href: "/helpdesk", label: "Portal Helpdesk (Meus Chamados, Filas, Áreas)", icon: <IconTicket /> },
     { href: "/admin/helpdesk", label: "Helpdesk Admin", icon: <IconMessageCircle /> },
     { href: "/admin/helpdesk/tipos", label: "Tipos de Solicitação", icon: <IconMessageCircle /> },

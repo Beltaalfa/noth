@@ -44,6 +44,8 @@ export async function GET(request: Request) {
     sector_id: t.sectorId,
     sector_nome: t.sector?.name ?? null,
     status: t.status,
+    sla_limit_hours: t.slaLimitHours,
+    sla_warn_hours_before: t.slaWarnHoursBefore,
     created_at: t.createdAt,
     updated_at: t.updatedAt,
   }));
@@ -58,13 +60,13 @@ export async function POST(request: Request) {
   const userId = (session.user as { id?: string })?.id;
   if (!userId) return NextResponse.json({ error: "Sessão inválida" }, { status: 401 });
 
-  let body: { clientId: string; nome: string; groupId?: string | null; sectorId?: string | null; status?: string };
+  let body: { clientId: string; nome: string; groupId?: string | null; sectorId?: string | null; status?: string; slaLimitHours?: number | null; slaWarnHoursBefore?: number | null };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
-  const { clientId, nome, groupId, sectorId, status = "A" } = body;
+  const { clientId, nome, groupId, sectorId, status = "A", slaLimitHours, slaWarnHoursBefore } = body;
   if (!clientId || !nome?.trim()) return NextResponse.json({ error: "clientId e nome obrigatórios" }, { status: 400 });
   if (status !== "A" && status !== "I") return NextResponse.json({ error: "status deve ser A ou I" }, { status: 400 });
 
@@ -78,6 +80,8 @@ export async function POST(request: Request) {
       groupId: groupId || null,
       sectorId: sectorId || null,
       status,
+      slaLimitHours: slaLimitHours != null && Number.isInteger(slaLimitHours) && slaLimitHours > 0 ? slaLimitHours : null,
+      slaWarnHoursBefore: slaWarnHoursBefore != null && Number.isInteger(slaWarnHoursBefore) && slaWarnHoursBefore >= 0 ? slaWarnHoursBefore : null,
     },
   });
 
@@ -95,6 +99,8 @@ export async function POST(request: Request) {
     group_id: inserted.groupId,
     sector_id: inserted.sectorId,
     status: inserted.status,
+    sla_limit_hours: inserted.slaLimitHours,
+    sla_warn_hours_before: inserted.slaWarnHoursBefore,
     created_at: inserted.createdAt,
     updated_at: inserted.updatedAt,
   });
